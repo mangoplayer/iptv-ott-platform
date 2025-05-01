@@ -51,21 +51,26 @@ export default function LiveTVPage() {
     }
   }, [isAuthenticated, selectedCategoryId, fetchLiveChannelsByCategory]);
   
-  // Filter channels based on search query
+  // Filter channels based on search query and selected category
   useEffect(() => {
+    // Get channels for the selected category
+    const currentChannels = selectedCategoryId && liveChannels[selectedCategoryId] 
+      ? liveChannels[selectedCategoryId] 
+      : [];
+    
     if (!searchQuery.trim()) {
-      setFilteredChannels(liveChannels);
+      setFilteredChannels(currentChannels);
       return;
     }
     
     const query = searchQuery.toLowerCase();
-    const filtered = liveChannels.filter(channel => 
+    const filtered = currentChannels.filter(channel => 
       channel.name.toLowerCase().includes(query) ||
       (channel.currentProgram?.title?.toLowerCase().includes(query))
     );
     
     setFilteredChannels(filtered);
-  }, [searchQuery, liveChannels]);
+  }, [searchQuery, liveChannels, selectedCategoryId]);
   
   // Handle category selection
   const handleCategorySelect = (categoryId: string | null) => {

@@ -48,15 +48,20 @@ export default function SeriesPage() {
     }
   }, [isAuthenticated, selectedCategoryId, fetchSeriesByCategory]);
   
-  // Filter series based on search query
+  // Filter series based on search query and selected category
   useEffect(() => {
+    // Get series for the selected category
+    const currentSeries = selectedCategoryId && series[selectedCategoryId] 
+      ? series[selectedCategoryId] 
+      : [];
+    
     if (!searchQuery.trim()) {
-      setFilteredSeries(series);
+      setFilteredSeries(currentSeries);
       return;
     }
     
     const query = searchQuery.toLowerCase();
-    const filtered = series.filter(show => 
+    const filtered = currentSeries.filter(show => 
       show.name.toLowerCase().includes(query) ||
       (show.genre && show.genre.toLowerCase().includes(query)) ||
       (show.director && show.director.toLowerCase().includes(query)) ||
@@ -64,7 +69,7 @@ export default function SeriesPage() {
     );
     
     setFilteredSeries(filtered);
-  }, [searchQuery, series]);
+  }, [searchQuery, series, selectedCategoryId]);
   
   // Handle category selection
   const handleCategorySelect = (categoryId: string | null) => {

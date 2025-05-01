@@ -48,15 +48,20 @@ export default function MoviesPage() {
     }
   }, [isAuthenticated, selectedCategoryId, fetchMoviesByCategory]);
   
-  // Filter movies based on search query
+  // Filter movies based on search query and selected category
   useEffect(() => {
+    // Get movies for the selected category
+    const currentMovies = selectedCategoryId && movies[selectedCategoryId] 
+      ? movies[selectedCategoryId] 
+      : [];
+    
     if (!searchQuery.trim()) {
-      setFilteredMovies(movies);
+      setFilteredMovies(currentMovies);
       return;
     }
     
     const query = searchQuery.toLowerCase();
-    const filtered = movies.filter(movie => 
+    const filtered = currentMovies.filter(movie => 
       movie.name.toLowerCase().includes(query) ||
       (movie.genre && movie.genre.toLowerCase().includes(query)) ||
       (movie.director && movie.director.toLowerCase().includes(query)) ||
@@ -64,7 +69,7 @@ export default function MoviesPage() {
     );
     
     setFilteredMovies(filtered);
-  }, [searchQuery, movies]);
+  }, [searchQuery, movies, selectedCategoryId]);
   
   // Handle category selection
   const handleCategorySelect = (categoryId: string | null) => {
