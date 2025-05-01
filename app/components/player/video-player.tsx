@@ -75,93 +75,123 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
     let playAttempted = false;
     
     const initializePlayer = () => {
-      if (Hls.isSupported()) {
-        console.log('HLS is supported, creating new instance');
-        hlsInstance = new Hls({
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60,
-          // Add more stability with these options
-          fragLoadingMaxRetry: 5,
-          manifestLoadingMaxRetry: 5,
-          levelLoadingMaxRetry: 5,
-          fragLoadingRetryDelay: 1000,
-          manifestLoadingRetryDelay: 1000,
-          levelLoadingRetryDelay: 1000,
-        });
-        
-        // Add event listeners before loading source
-        hlsInstance.on(Hls.Events.MANIFEST_LOADING, () => {
-          console.log('Manifest loading...');
-        });
-        
-        hlsInstance.on(Hls.Events.MANIFEST_LOADED, () => {
-          console.log('Manifest loaded successfully');
-        });
-        
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-          console.log('Manifest parsed, ready to play');
-          if (isPlaying && videoRef.current && !playAttempted) {
-            playAttempted = true;
-            // Add a small delay before attempting to play
-            setTimeout(() => {
-              if (videoRef.current) {
-                console.log('Attempting to play video...');
-                videoRef.current.play().catch(error => {
-                  console.error('Error playing video:', error);
-                  // If autoplay was prevented, we can try again with user interaction
-                  if (error.name === 'NotAllowedError') {
-                    console.log('Autoplay prevented, waiting for user interaction');
-                  }
-                });
-              }
-            }, 300); // Increased delay for more stability
-          }
-        });
-        
-        hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-          console.warn('HLS error:', data.type, data.details);
-          
-          if (data.fatal) {
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                console.error('Network error:', data);
-                console.log('Trying to recover from network error...');
-                hlsInstance?.startLoad();
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                console.error('Media error:', data);
-                console.log('Trying to recover from media error...');
-                hlsInstance?.recoverMediaError();
-                break;
-              default:
-                console.error('Unrecoverable error:', data);
-                hlsInstance?.destroy();
-                break;
+      try {
+        if (Hls.isSupported()) {
+          console.log('HLS is supported, creating new instance');
+          hlsInstance = new Hls({
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            // Add more stability with these options
+            fragLoadingMaxRetry: 5,
+            manifestLoadingMaxRetry: 5,
+            levelLoadingMaxRetry: 5,
+            fragLoadingRetryDelay: 1000,
+            manifestLoadingRetryDelay: 1000,
+            levelLoadingRetryDelay: 1000,
+            // Add debug logs
+            debug: true,
+            // Use fetch instead of XHR for better CORS handling
+            xhrSetup: function(xhr, url) {
+              // Log URL being requested
+              console.log('HLS requesting URL:', url);
             }
-          }
-        });
-        
-        // Now load the source
-        console.log('Loading source into HLS.js:', source);
-        hlsInstance.loadSource(source);
-        hlsInstance.attachMedia(videoRef.current!);
-        
-        setHls(hlsInstance);
-      } else if (videoRef.current?.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native HLS support (Safari)
-        console.log('Using native HLS support');
-        videoRef.current.src = source;
-      } else {
-        console.error('HLS is not supported in this browser and no native support');
-        // Fallback to direct source if possible
-        videoRef.current.src = source;
+          });
+          
+          // Add event listeners before loading source
+          hlsInstance.on(Hls.Events.MANIFEST_LOADING, () => {
+            console.log('Manifest loading...');
+          });
+          
+          hlsInstance.on(Hls.Events.MANIFEST_LOADED, () => {
+            console.log('Manifest loaded successfully');
+          });
+          
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+            console.log('Manifest parsed, ready to play');
+            if (isPlaying && videoRef.current && !playAttempted) {
+              playAttempted = true;
+              // Add a small delay before attempting to play
+              setTimeout(() => {
+                if (videoRef.current) {
+                  console.log('Attempting to play video...');
+                  videoRef.current.play().catch(error => {
+                    console.error('Error playing video:', error);
+                    // If autoplay was prevented, we can try again with user interaction
+                    if (error.name === 'NotAllowedError') {
+                      console.log('Autoplay prevented, waiting for user interaction');
+                    }
+                  });
+                }
+              }, 500); // Increased delay for more stability
+            }
+          });
+          
+          hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+            console.warn('HLS error:', data.type, data.details);
+            
+            if (data.fatal) {
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  console.error('Network error:', data);
+                  console.log('Trying to recover from network error...');
+                  // Try to recover with a delay
+                  setTimeout(() => {
+                    hlsInstance?.startLoad();
+                  }, 1000);
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  console.error('Media error:', data);
+                  console.log('Trying to recover from media error...');
+                  hlsInstance?.recoverMediaError();
+                  break;
+                default:
+                  console.error('Unrecoverable error:', data);
+                  // Try to recreate the instance
+                  if (hlsInstance) {
+                    hlsInstance.destroy();
+                    // Create a new instance after a delay
+                    setTimeout(() => {
+                      initializePlayer();
+                    }, 2000);
+                  }
+                  break;
+              }
+            }
+          });
+          
+          // Add more event listeners for debugging
+          hlsInstance.on(Hls.Events.LEVEL_LOADED, (event, data) => {
+            console.log('Level loaded:', data);
+          });
+          
+          hlsInstance.on(Hls.Events.FRAG_LOADED, (event, data) => {
+            console.log('Fragment loaded:', data.frag.url);
+          });
+          
+          // Now load the source
+          console.log('Loading source into HLS.js:', source);
+          hlsInstance.loadSource(source);
+          hlsInstance.attachMedia(videoRef.current!);
+          
+          setHls(hlsInstance);
+        } else if (videoRef.current?.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS support (Safari)
+          console.log('Using native HLS support');
+          videoRef.current.src = source;
+        } else {
+          console.error('HLS is not supported in this browser and no native support');
+          // Fallback to direct source if possible
+          videoRef.current.src = source;
+        }
+      } catch (error) {
+        console.error('Error initializing HLS player:', error);
       }
     };
     
     // Small delay before initializing to avoid rapid source changes
     const initTimer = setTimeout(() => {
       initializePlayer();
-    }, 100);
+    }, 300);
     
     return () => {
       clearTimeout(initTimer);
@@ -170,7 +200,7 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
         hlsInstance.destroy();
       }
     };
-  }, [source, hls]);
+  }, [source, hls, isPlaying]);
   
   // Handle play/pause
   useEffect(() => {
@@ -185,29 +215,49 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
         // Add a small delay to avoid rapid play/pause calls
         setTimeout(() => {
           if (videoRef.current) {
-            const playPromise = videoRef.current.play();
-            
-            if (playPromise !== undefined) {
-              playPromise.catch(error => {
-                console.error('Error playing video:', error);
-                // If autoplay was prevented, we can try again with user interaction
-                if (error.name === 'NotAllowedError') {
-                  console.log('Autoplay prevented, waiting for user interaction');
-                } else if (error.name === 'AbortError') {
-                  console.log('Play request was aborted, likely due to another play request');
-                }
-              });
+            try {
+              const playPromise = videoRef.current.play();
+              
+              if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                  console.error('Error playing video:', error);
+                  // If autoplay was prevented, we can try again with user interaction
+                  if (error.name === 'NotAllowedError') {
+                    console.log('Autoplay prevented, waiting for user interaction');
+                  } else if (error.name === 'AbortError') {
+                    console.log('Play request was aborted, likely due to another play request');
+                  }
+                });
+              }
+            } catch (error) {
+              console.error('Exception during play attempt:', error);
             }
           }
-        }, 200);
+        }, 500);
       } else {
         console.log('HLS not ready yet, waiting for initialization');
+        
+        // If HLS isn't ready but we have a video element, try direct play as fallback
+        if (videoRef.current && videoRef.current.src === source) {
+          console.log('Attempting direct play without HLS...');
+          try {
+            videoRef.current.play().catch(error => {
+              console.error('Error with direct play:', error);
+            });
+          } catch (error) {
+            console.error('Exception during direct play attempt:', error);
+          }
+        }
       }
     } else {
       // Check if the video is actually playing before pausing
       if (videoRef.current && !videoRef.current.paused) {
         console.log('Pausing video');
-        videoRef.current.pause();
+        try {
+          videoRef.current.pause();
+        } catch (error) {
+          console.error('Error pausing video:', error);
+        }
       }
     }
   }, [isPlaying, source, hls]);
