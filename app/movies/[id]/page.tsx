@@ -302,10 +302,12 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
                 </div>
               )}
               
-              {/* Video player (if playing) */}
-              <div className="mt-8">
-                <VideoPlayer />
-              </div>
+              {/* Video player (only show when playing) */}
+              {usePlayerStore.getState().isPlaying && usePlayerStore.getState().source && (
+                <div className="mt-8">
+                  <VideoPlayer />
+                </div>
+              )}
             </motion.div>
           </div>
         </div>
