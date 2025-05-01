@@ -48,6 +48,7 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [seriesId, setSeriesId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   
   // Unwrap params
   useEffect(() => {
@@ -190,7 +191,13 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   const handlePlayEpisode = (episode: TVShowEpisode) => {
     if (series) {
       playSeriesEpisode(episode, series);
+      setIsPlaying(true);
     }
+  };
+  
+  // Handle close video player
+  const handleClosePlayer = () => {
+    setIsPlaying(false);
   };
   
   // Check if episode is watched
@@ -208,13 +215,20 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   
   return (
     <div className="min-h-screen">
+      {/* Video player */}
+      {isPlaying && (
+        <div className="fixed inset-0 z-50 bg-background">
+          <VideoPlayer onClose={handleClosePlayer} isFullPage />
+        </div>
+      )}
+      
       {/* Backdrop image */}
       {tmdbDetails?.backdrop_path && (
         <div className="absolute top-0 left-0 w-full h-[50vh] z-0">
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background z-10" />
           <Image
             src={`https://image.tmdb.org/t/p/original${tmdbDetails.backdrop_path}`}
-            alt={series.name}
+            alt={series?.name || "Series backdrop"}
             fill
             className="object-cover opacity-30"
             priority

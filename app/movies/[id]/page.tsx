@@ -42,6 +42,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const [similarMovies, setSimilarMovies] = useState<Movie[]>([]);
   const [tmdbDetails, setTmdbDetails] = useState<TMDBMovie | null>(null);
   const [movieId, setMovieId] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   
   // Unwrap params
   useEffect(() => {
@@ -135,7 +136,13 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const handlePlay = () => {
     if (movie) {
       playMovie(movie);
+      setIsPlaying(true);
     }
+  };
+  
+  // Handle close video player
+  const handleClosePlayer = () => {
+    setIsPlaying(false);
   };
   
   // Handle favorite toggle
@@ -158,13 +165,20 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   
   return (
     <div className="min-h-screen">
+      {/* Video player */}
+      {isPlaying && (
+        <div className="fixed inset-0 z-50 bg-background">
+          <VideoPlayer onClose={handleClosePlayer} isFullPage />
+        </div>
+      )}
+      
       {/* Backdrop image */}
       {tmdbDetails?.backdrop_path && (
         <div className="absolute top-0 left-0 w-full h-[50vh] z-0">
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background z-10" />
           <Image
             src={`https://image.tmdb.org/t/p/original${tmdbDetails.backdrop_path}`}
-            alt={movie.name}
+            alt={movie?.name || "Movie backdrop"}
             fill
             className="object-cover opacity-30"
             priority
