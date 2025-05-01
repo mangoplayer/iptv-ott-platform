@@ -41,11 +41,18 @@ export function ContentCard({
     ? (content as LiveChannel | Movie).name
     : (content as TVShow).name;
   
-  const imageUrl = type === 'channel'
+  // Get image URL and provide a fallback if it's invalid or missing
+  let imageUrl = type === 'channel'
     ? (content as LiveChannel).stream_icon
     : type === 'movie'
       ? (content as Movie).stream_icon
       : (content as TVShow).cover;
+      
+  // Ensure the URL is valid or provide a fallback
+  if (!imageUrl || imageUrl === 'N/A' || imageUrl === '') {
+    // Use a default placeholder based on content type
+    imageUrl = `/images/placeholder-${type}.jpg`;
+  }
   
   const isFav = isFavorite(id);
   
