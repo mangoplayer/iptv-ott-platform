@@ -12,7 +12,7 @@ import { usePreferencesStore } from './store/preferences-store';
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, initializeApi } = useAuthStore();
   const { history } = usePreferencesStore();
   const { 
     fetchLiveCategories, 
@@ -22,6 +22,13 @@ export default function Home() {
     movieCategories,
     seriesCategories,
   } = useContentStore();
+  
+  // Initialize API on page load if user is authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      initializeApi();
+    }
+  }, [isAuthenticated, user, initializeApi]);
   
   // Fetch categories when authenticated
   useEffect(() => {

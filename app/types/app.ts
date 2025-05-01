@@ -5,13 +5,13 @@ import { XtreamLiveStream, XtreamSeries, XtreamVodStream, XtreamSeriesInfo, Xtre
 // User and Authentication
 export interface User {
   username: string;
+  password?: string; // Optional for API calls
   expiryDate: string;
   maxConnections: number;
   activeConnections: number;
   status: 'active' | 'expired' | 'banned';
   isTrial: boolean;
   createdAt: string;
-  serverUrl: string;
   serverInfo?: {
     version: string;
     timezone: string;
