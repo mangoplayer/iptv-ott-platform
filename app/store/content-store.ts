@@ -38,16 +38,19 @@ interface ContentActions {
   // Live TV actions
   fetchLiveCategories: () => Promise<void>;
   fetchLiveChannels: (categoryId?: string) => Promise<void>;
+  fetchLiveChannelsByCategory: (categoryId: string | null) => Promise<void>;
   setSelectedLiveCategory: (categoryId: string | null) => void;
   
   // Movies actions
   fetchMovieCategories: () => Promise<void>;
   fetchMovies: (categoryId?: string) => Promise<void>;
+  fetchMoviesByCategory: (categoryId: string | null) => Promise<void>;
   setSelectedMovieCategory: (categoryId: string | null) => void;
   
   // Series actions
   fetchSeriesCategories: () => Promise<void>;
   fetchSeries: (categoryId?: string) => Promise<void>;
+  fetchSeriesByCategory: (categoryId: string | null) => Promise<void>;
   setSelectedSeriesCategory: (categoryId: string | null) => void;
   
   // Reset store
@@ -137,6 +140,15 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     }
   },
   
+  fetchLiveChannelsByCategory: async (categoryId: string | null) => {
+    if (categoryId) {
+      return get().fetchLiveChannels(categoryId);
+    } else {
+      // If no category is selected, fetch all channels
+      return get().fetchLiveChannels();
+    }
+  },
+  
   setSelectedLiveCategory: (categoryId: string | null) => {
     set({ selectedLiveCategory: categoryId });
     
@@ -204,6 +216,15 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     }
   },
   
+  fetchMoviesByCategory: async (categoryId: string | null) => {
+    if (categoryId) {
+      return get().fetchMovies(categoryId);
+    } else {
+      // If no category is selected, fetch all movies
+      return get().fetchMovies();
+    }
+  },
+  
   setSelectedMovieCategory: (categoryId: string | null) => {
     set({ selectedMovieCategory: categoryId });
     
@@ -268,6 +289,15 @@ export const useContentStore = create<ContentStore>((set, get) => ({
         loadingSeries: false,
         error: error instanceof Error ? error.message : 'Failed to fetch TV series',
       });
+    }
+  },
+  
+  fetchSeriesByCategory: async (categoryId: string | null) => {
+    if (categoryId) {
+      return get().fetchSeries(categoryId);
+    } else {
+      // If no category is selected, fetch all series
+      return get().fetchSeries();
     }
   },
   
