@@ -46,39 +46,81 @@ export const useAuthStore = create<AuthStore>()(
             password,
           });
           
-          // Authenticate and get user info
-          const authResponse = await xtreamApi.authenticate();
+          // Try up to 3 times with exponential backoff
+          let attempt = 0;
+          let success = false;
+          let lastError: any = null;
           
-          if (authResponse.user_info.auth !== 1) {
-            throw new Error('Authentication failed: Invalid credentials');
+          while (attempt < 3 && !success) {
+            try {
+              if (attempt > 0) {
+                console.log(`Retrying authentication (attempt ${attempt + 1}/3)`);
+                // Wait with exponential backoff
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+              }
+              
+              // Authenticate and get user info
+              const authResponse = await xtreamApi.authenticate();
+              
+              if (authResponse.user_info.auth !== 1) {
+                throw new Error('Authentication failed: Invalid credentials');
+              }
+              
+              // Map the user info to our User type
+              const user: User = {
+                username: authResponse.user_info.username,
+                password, // Store password for API calls
+                expiryDate: authResponse.user_info.exp_date,
+                maxConnections: parseInt(authResponse.user_info.max_connections),
+                activeConnections: parseInt(authResponse.user_info.active_cons),
+                status: authResponse.user_info.status === 'Active' ? 'active' : 'expired',
+                isTrial: authResponse.user_info.is_trial === '1',
+                createdAt: authResponse.user_info.created_at,
+              };
+              
+              set({
+                isAuthenticated: true,
+                user,
+                serverUrl,
+                loading: false,
+                error: null,
+              });
+              
+              success = true;
+            } catch (error) {
+              lastError = error;
+              console.error(`Authentication error (attempt ${attempt + 1}/3):`, error);
+              attempt++;
+              
+              // If this was the last attempt, propagate the error
+              if (attempt >= 3) {
+                throw error;
+              }
+            }
+          }
+        } catch (error: any) {
+          console.error('Login error after retries:', error);
+          
+          // Provide more user-friendly error messages
+          let errorMessage = 'Unknown error occurred';
+          
+          if (error.message?.includes('ENOTFOUND') || error.cause?.code === 'ENOTFOUND') {
+            errorMessage = `Cannot connect to server: ${serverUrl}. Please check the server URL and your internet connection.`;
+          } else if (error.message?.includes('ECONNREFUSED') || error.cause?.code === 'ECONNREFUSED') {
+            errorMessage = `Connection refused by server: ${serverUrl}. Please check if the server is running.`;
+          } else if (error.message?.includes('Invalid credentials')) {
+            errorMessage = 'Invalid username or password. Please check your credentials.';
+          } else if (error.message?.includes('429')) {
+            errorMessage = 'Too many requests. Please try again later.';
+          } else if (error instanceof Error) {
+            errorMessage = error.message;
           }
           
-          // Map the user info to our User type
-          const user: User = {
-            username: authResponse.user_info.username,
-            password, // Store password for API calls
-            expiryDate: authResponse.user_info.exp_date,
-            maxConnections: parseInt(authResponse.user_info.max_connections),
-            activeConnections: parseInt(authResponse.user_info.active_cons),
-            status: authResponse.user_info.status === 'Active' ? 'active' : 'expired',
-            isTrial: authResponse.user_info.is_trial === '1',
-            createdAt: authResponse.user_info.created_at,
-          };
-          
-          set({
-            isAuthenticated: true,
-            user,
-            serverUrl,
-            loading: false,
-            error: null,
-          });
-        } catch (error) {
-          console.error('Login error:', error);
           set({
             isAuthenticated: false,
             user: null,
             loading: false,
-            error: error instanceof Error ? error.message : 'Unknown error occurred',
+            error: errorMessage,
           });
         }
       },

@@ -78,21 +78,25 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
       try {
         if (Hls.isSupported()) {
           console.log('HLS is supported, creating new instance');
+          
+          // Enable debug mode for troubleshooting
+          Hls.DefaultConfig.debug = true;
+          
           hlsInstance = new Hls({
             maxBufferLength: 30,
             maxMaxBufferLength: 60,
             // Modern retry policy configuration
             fragLoadPolicy: {
               default: {
-                maxTimeToFirstByteMs: 10000,
+                maxTimeToFirstByteMs: 20000, // Increased timeout
                 maxLoadTimeMs: 120000,
                 timeoutRetry: {
-                  maxNumRetry: 5,
+                  maxNumRetry: 8, // Increased retries
                   retryDelayMs: 1000,
                   maxRetryDelayMs: 0
                 },
                 errorRetry: {
-                  maxNumRetry: 5,
+                  maxNumRetry: 8, // Increased retries
                   retryDelayMs: 1000,
                   maxRetryDelayMs: 8000
                 }
@@ -100,40 +104,60 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
             },
             manifestLoadPolicy: {
               default: {
-                maxTimeToFirstByteMs: 10000,
+                maxTimeToFirstByteMs: 20000, // Increased timeout
                 maxLoadTimeMs: 120000,
                 timeoutRetry: {
-                  maxNumRetry: 5,
+                  maxNumRetry: 8, // Increased retries
                   retryDelayMs: 1000,
                   maxRetryDelayMs: 0
                 },
                 errorRetry: {
-                  maxNumRetry: 5,
+                  maxNumRetry: 8, // Increased retries
                   retryDelayMs: 1000,
                   maxRetryDelayMs: 8000
                 }
               }
             },
-            // Add debug logs
-            debug: false,
+            // Enable debug logs
+            debug: true,
             // Use fetch instead of XHR for better CORS handling
             xhrSetup: function(xhr, url) {
               // Log URL being requested
               console.log('HLS requesting URL:', url);
-            }
+              
+              // Set withCredentials to true to include cookies in cross-origin requests
+              xhr.withCredentials = true;
+              
+              // Add custom headers if needed
+              // xhr.setRequestHeader('X-Custom-Header', 'value');
+            },
+            // Enable low latency mode
+            lowLatencyMode: true,
+            // Increase buffer size
+            backBufferLength: 90
           });
           
           // Add event listeners before loading source
           hlsInstance.on(Hls.Events.MANIFEST_LOADING, () => {
-            console.log('Manifest loading...');
+            console.log('Manifest loading...', source);
+            setIsBuffering(true);
           });
           
-          hlsInstance.on(Hls.Events.MANIFEST_LOADED, () => {
-            console.log('Manifest loaded successfully');
+          hlsInstance.on(Hls.Events.MANIFEST_LOADED, (event, data) => {
+            console.log('Manifest loaded successfully', data);
           });
           
-          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-            console.log('Manifest parsed, ready to play');
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+            console.log('Manifest parsed, ready to play', data);
+            
+            // Check if we have levels (quality options)
+            if (data.levels && data.levels.length > 0) {
+              console.log(`Available quality levels: ${data.levels.length}`);
+              data.levels.forEach((level, index) => {
+                console.log(`Level ${index}: ${level.width}x${level.height} @ ${level.bitrate}bps`);
+              });
+            }
+            
             if (isPlaying && videoRef.current && !playAttempted) {
               playAttempted = true;
               // Add a small delay before attempting to play
@@ -148,28 +172,43 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
                     }
                   });
                 }
-              }, 500); // Increased delay for more stability
+              }, 1000); // Increased delay for more stability
             }
           });
           
           hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-            console.warn('HLS error:', data.type, data.details);
+            console.warn('HLS error:', data.type, data.details, data);
             
             if (data.fatal) {
               switch (data.type) {
                 case Hls.ErrorTypes.NETWORK_ERROR:
                   console.error('Network error:', data);
+                  
+                  // Check if this is a CORS error
+                  if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
+                      data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
+                      data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+                    console.log('Possible CORS issue or network error, trying to recover...');
+                  }
+                  
                   console.log('Trying to recover from network error...');
                   // Try to recover with a delay
                   setTimeout(() => {
-                    hlsInstance?.startLoad();
-                  }, 1000);
+                    if (hlsInstance) {
+                      console.log('Restarting load after network error');
+                      hlsInstance.startLoad();
+                    }
+                  }, 2000);
                   break;
+                  
                 case Hls.ErrorTypes.MEDIA_ERROR:
                   console.error('Media error:', data);
                   console.log('Trying to recover from media error...');
-                  hlsInstance?.recoverMediaError();
+                  if (hlsInstance) {
+                    hlsInstance.recoverMediaError();
+                  }
                   break;
+                  
                 default:
                   console.error('Unrecoverable error:', data);
                   // Try to recreate the instance
@@ -177,6 +216,7 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
                     hlsInstance.destroy();
                     // Create a new instance after a delay
                     setTimeout(() => {
+                      console.log('Recreating HLS instance after unrecoverable error');
                       initializePlayer();
                     }, 2000);
                   }
@@ -187,17 +227,45 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
           
           // Add more event listeners for debugging
           hlsInstance.on(Hls.Events.LEVEL_LOADED, (event, data) => {
-            console.log('Level loaded:', data);
+            console.log('Level loaded:', data.level, data);
           });
           
           hlsInstance.on(Hls.Events.FRAG_LOADED, (event, data) => {
             console.log('Fragment loaded:', data.frag.url);
+            setIsBuffering(false); // Turn off buffering indicator when fragments load
+          });
+          
+          hlsInstance.on(Hls.Events.FRAG_LOADING, (event, data) => {
+            console.log('Fragment loading:', data.frag.url);
+          });
+          
+          hlsInstance.on(Hls.Events.BUFFER_CREATED, () => {
+            console.log('Buffer created');
+          });
+          
+          hlsInstance.on(Hls.Events.BUFFER_APPENDED, () => {
+            console.log('Buffer appended');
           });
           
           // Now load the source
           console.log('Loading source into HLS.js:', source);
+          
+          // Check if the source URL is valid
+          if (!source.startsWith('http')) {
+            console.error('Invalid source URL:', source);
+            return;
+          }
+          
           hlsInstance.loadSource(source);
           hlsInstance.attachMedia(videoRef.current!);
+          
+          // Set initial quality to auto
+          hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+            console.log(`Quality changed to level ${data.level}`);
+          });
+          
+          // Start with auto quality
+          hlsInstance.autoLevelEnabled = true;
           
           setHls(hlsInstance);
         } else if (videoRef.current?.canPlayType('application/vnd.apple.mpegurl')) {
@@ -217,7 +285,7 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
     // Small delay before initializing to avoid rapid source changes
     const initTimer = setTimeout(() => {
       initializePlayer();
-    }, 300);
+    }, 500);
     
     return () => {
       clearTimeout(initTimer);

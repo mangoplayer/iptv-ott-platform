@@ -447,16 +447,38 @@ class XtreamAPI {
       throw new Error('API not initialized');
     }
     
-    return `${this.serverUrl}/live/${this.username}/${this.password}/${streamId}.m3u8`;
+    // Create direct URL
+    const directUrl = `${this.serverUrl}/live/${this.username}/${this.password}/${streamId}.m3u8`;
+    
+    // Use our proxy for HLS streams to avoid CORS issues
+    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(directUrl)}`;
+    
+    // Log the URLs for debugging
+    console.log('Generated live stream URL:', directUrl);
+    console.log('Proxied live stream URL:', proxyUrl);
+    
+    // Return the proxied URL to avoid CORS issues
+    return proxyUrl;
   }
   
   // Get stream URL for VOD (movie)
-  public getVodStreamUrl(vodId: string): string {
+  public getVodStreamUrl(vodId: string, extension: string = 'm3u8'): string {
     if (!this.isInitialized()) {
       throw new Error('API not initialized');
     }
     
-    return `${this.serverUrl}/movie/${this.username}/${this.password}/${vodId}.m3u8`;
+    // Create direct URL
+    const directUrl = `${this.serverUrl}/movie/${this.username}/${this.password}/${vodId}.${extension}`;
+    
+    // Use our proxy for HLS streams to avoid CORS issues
+    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(directUrl)}`;
+    
+    // Log the URLs for debugging
+    console.log('Generated VOD stream URL:', directUrl);
+    console.log('Proxied VOD stream URL:', proxyUrl);
+    
+    // Return the proxied URL to avoid CORS issues
+    return proxyUrl;
   }
   
   // Get stream URL for series episode
@@ -465,7 +487,18 @@ class XtreamAPI {
       throw new Error('API not initialized');
     }
     
-    return `${this.serverUrl}/series/${this.username}/${this.password}/${episodeId}.m3u8`;
+    // Create direct URL
+    const directUrl = `${this.serverUrl}/series/${this.username}/${this.password}/${episodeId}.m3u8`;
+    
+    // Use our proxy for HLS streams to avoid CORS issues
+    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(directUrl)}`;
+    
+    // Log the URLs for debugging
+    console.log('Generated series stream URL:', directUrl);
+    console.log('Proxied series stream URL:', proxyUrl);
+    
+    // Return the proxied URL to avoid CORS issues
+    return proxyUrl;
   }
 }
 

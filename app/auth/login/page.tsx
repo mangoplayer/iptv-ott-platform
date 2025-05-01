@@ -32,13 +32,13 @@ export default function LoginPage() {
   const { login, loading, error } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Initialize form
+  // Initialize form with provided credentials
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      serverUrl: '',
-      username: '',
-      password: '',
+      serverUrl: 'http://denge.click:8080',
+      username: 'dengedenge',
+      password: 'sadeceben20',
     },
   });
   
@@ -155,11 +155,11 @@ export default function LoginPage() {
           
           <div className="mt-6 grid grid-cols-1 gap-3">
             <Button variant="outline" className="w-full" onClick={() => {
-              form.setValue('serverUrl', 'http://demo.iptv.com:8080');
-              form.setValue('username', 'demo');
-              form.setValue('password', 'demo');
+              form.setValue('serverUrl', 'http://denge.click:8080');
+              form.setValue('username', 'dengedenge');
+              form.setValue('password', 'sadeceben20');
             }}>
-              Use Demo Account
+              Use Test Account
             </Button>
           </div>
         </div>
