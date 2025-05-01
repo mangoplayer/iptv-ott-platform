@@ -14,6 +14,23 @@ import {
   XtreamVodStream,
 } from '../types/xtream';
 
+// Helper function to use proxy for API requests
+async function proxyRequest<T>(url: string, params: Record<string, any>): Promise<T> {
+  try {
+    // Use our proxy API route
+    const response = await axios.post('/api/proxy', {
+      url,
+      method: 'GET',
+      data: params,
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Proxy request failed:', error);
+    throw error;
+  }
+}
+
 class XtreamAPI {
   private credentials: XtreamCredentials | null = null;
   private endpoints: XtreamApiEndpoints | null = null;
@@ -56,14 +73,13 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamAuthResponse>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-        },
+      // Use proxy for authentication
+      const data = await proxyRequest<XtreamAuthResponse>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Authentication error:', error);
       throw new Error('Failed to authenticate with Xtream server');
@@ -79,15 +95,14 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamLiveCategory[]>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-          action: 'get_live_categories',
-        },
+      // Use proxy for live categories
+      const data = await proxyRequest<XtreamLiveCategory[]>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
+        action: 'get_live_categories',
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching live categories:', error);
       throw new Error('Failed to fetch live TV categories');
@@ -113,11 +128,10 @@ class XtreamAPI {
         params.category_id = categoryId;
       }
 
-      const response = await axios.get<XtreamLiveStream[]>(this.endpoints.player_api, {
-        params,
-      });
+      // Use proxy for live streams
+      const data = await proxyRequest<XtreamLiveStream[]>(this.endpoints.player_api, params);
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching live streams:', error);
       throw new Error('Failed to fetch live TV channels');
@@ -133,15 +147,14 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamVodCategory[]>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-          action: 'get_vod_categories',
-        },
+      // Use proxy for VOD categories
+      const data = await proxyRequest<XtreamVodCategory[]>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
+        action: 'get_vod_categories',
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching VOD categories:', error);
       throw new Error('Failed to fetch movie categories');
@@ -167,11 +180,10 @@ class XtreamAPI {
         params.category_id = categoryId;
       }
 
-      const response = await axios.get<XtreamVodStream[]>(this.endpoints.player_api, {
-        params,
-      });
+      // Use proxy for VOD streams
+      const data = await proxyRequest<XtreamVodStream[]>(this.endpoints.player_api, params);
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching VOD streams:', error);
       throw new Error('Failed to fetch movies');
@@ -187,16 +199,15 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamVodInfo>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-          action: 'get_vod_info',
-          vod_id: vodId,
-        },
+      // Use proxy for VOD info
+      const data = await proxyRequest<XtreamVodInfo>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
+        action: 'get_vod_info',
+        vod_id: vodId,
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching VOD info:', error);
       throw new Error('Failed to fetch movie details');
@@ -212,15 +223,14 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamSeriesCategory[]>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-          action: 'get_series_categories',
-        },
+      // Use proxy for series categories
+      const data = await proxyRequest<XtreamSeriesCategory[]>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
+        action: 'get_series_categories',
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching series categories:', error);
       throw new Error('Failed to fetch TV series categories');
@@ -246,11 +256,10 @@ class XtreamAPI {
         params.category_id = categoryId;
       }
 
-      const response = await axios.get<XtreamSeries[]>(this.endpoints.player_api, {
-        params,
-      });
+      // Use proxy for series
+      const data = await proxyRequest<XtreamSeries[]>(this.endpoints.player_api, params);
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching series:', error);
       throw new Error('Failed to fetch TV series');
@@ -266,16 +275,15 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamSeriesInfo>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-          action: 'get_series_info',
-          series_id: seriesId,
-        },
+      // Use proxy for series info
+      const data = await proxyRequest<XtreamSeriesInfo>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
+        action: 'get_series_info',
+        series_id: seriesId,
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching series info:', error);
       throw new Error('Failed to fetch TV series details');
@@ -291,16 +299,15 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamEpgListings>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-          action: 'get_short_epg',
-          stream_id: streamId,
-        },
+      // Use proxy for EPG
+      const data = await proxyRequest<XtreamEpgListings>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
+        action: 'get_short_epg',
+        stream_id: streamId,
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching EPG:', error);
       throw new Error('Failed to fetch program guide');
@@ -316,17 +323,16 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamEpgListings>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-          action: 'get_short_epg',
-          stream_id: streamId,
-          limit,
-        },
+      // Use proxy for EPG with timeframe
+      const data = await proxyRequest<XtreamEpgListings>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
+        action: 'get_short_epg',
+        stream_id: streamId,
+        limit,
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching EPG with timeframe:', error);
       throw new Error('Failed to fetch program guide');
@@ -342,16 +348,15 @@ class XtreamAPI {
     }
 
     try {
-      const response = await axios.get<XtreamEpgListings>(this.endpoints.player_api, {
-        params: {
-          username: this.credentials?.username,
-          password: this.credentials?.password,
-          action: 'get_simple_data_table',
-          stream_id: streamId,
-        },
+      // Use proxy for all EPG
+      const data = await proxyRequest<XtreamEpgListings>(this.endpoints.player_api, {
+        username: this.credentials?.username,
+        password: this.credentials?.password,
+        action: 'get_simple_data_table',
+        stream_id: streamId,
       });
 
-      return response.data;
+      return data;
     } catch (error) {
       console.error('Error fetching all EPG:', error);
       throw new Error('Failed to fetch program guide');

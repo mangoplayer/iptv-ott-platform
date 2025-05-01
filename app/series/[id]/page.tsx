@@ -47,6 +47,7 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   const [episodes, setEpisodes] = useState<Record<string, TVShowEpisode[]>>({});
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [seriesId, setSeriesId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
   
   // Unwrap params
   useEffect(() => {
@@ -114,12 +115,20 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
     if (isAuthenticated && seriesId && selectedSeason) {
       // Check if we already have episodes for this season
       if (!episodes[selectedSeason]) {
-        contentStore.fetchSeriesEpisodes(seriesId, selectedSeason).then(episodesData => {
-          setEpisodes(prev => ({
-            ...prev,
-            [selectedSeason]: episodesData
-          }));
-        });
+        setLoading(true);
+        contentStore.fetchSeriesEpisodes(seriesId, selectedSeason)
+          .then(episodesData => {
+            setEpisodes(prev => ({
+              ...prev,
+              [selectedSeason]: episodesData
+            }));
+          })
+          .catch(error => {
+            console.error('Error fetching episodes:', error);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
       }
     }
   }, [isAuthenticated, seriesId, selectedSeason, episodes, contentStore]);
