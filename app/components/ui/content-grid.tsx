@@ -31,8 +31,11 @@ export function ContentGrid({
   loading = false,
   emptyContent,
 }: ContentGridProps) {
+  // Ensure items is an array
+  const itemsArray = Array.isArray(items) ? items : [];
+  
   // If no items and not loading, show empty content
-  if (items.length === 0 && !loading) {
+  if (itemsArray.length === 0 && !loading) {
     return (
       <div className="w-full py-12 flex items-center justify-center">
         {emptyContent || (
@@ -69,7 +72,7 @@ export function ContentGrid({
         className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-${gap / 4}`}
         style={{ gap: `${gap}px` }}
       >
-        {items.map((item, index) => {
+        {itemsArray.map((item, index) => {
           const id = type === 'channel' 
             ? (item as LiveChannel).stream_id 
             : type === 'movie' 
@@ -110,11 +113,11 @@ export function ContentGrid({
               columnCount={cols}
               columnWidth={itemWidth}
               height={height}
-              rowCount={Math.ceil(items.length / cols)}
+              rowCount={Math.ceil(itemsArray.length / cols)}
               rowHeight={itemHeight + gap}
               width={width}
               itemData={{
-                items,
+                items: itemsArray,
                 type,
                 cols,
                 getItemHref,

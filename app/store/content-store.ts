@@ -104,8 +104,11 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     try {
       const streams = await xtreamApi.getLiveStreams(categoryId);
       
+      // Ensure streams is an array
+      const streamsArray = Array.isArray(streams) ? streams : [];
+      
       // Convert to LiveChannel type
-      const channels: LiveChannel[] = streams.map(stream => ({
+      const channels: LiveChannel[] = streamsArray.map(stream => ({
         ...stream,
       }));
       
@@ -180,8 +183,11 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     try {
       const streams = await xtreamApi.getVodStreams(categoryId);
       
+      // Ensure streams is an array
+      const streamsArray = Array.isArray(streams) ? streams : [];
+      
       // Convert to Movie type
-      const movies: Movie[] = streams.map(stream => ({
+      const movies: Movie[] = streamsArray.map(stream => ({
         ...stream,
       }));
       
@@ -256,8 +262,11 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     try {
       const seriesData = await xtreamApi.getSeries(categoryId);
       
+      // Ensure seriesData is an array
+      const seriesArray = Array.isArray(seriesData) ? seriesData : [];
+      
       // Convert to TVShow type
-      const tvShows: TVShow[] = seriesData.map(series => ({
+      const tvShows: TVShow[] = seriesArray.map(series => ({
         ...series,
       }));
       
