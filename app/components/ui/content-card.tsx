@@ -91,6 +91,7 @@ export function ContentCard({
           fill
           className="object-cover transition-transform group-hover:scale-110"
           sizes={width ? `${width}px` : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'}
+          unoptimized={true} // Disable optimization for external images
         />
       ) : (
         <div className="absolute inset-0 bg-muted flex items-center justify-center">
