@@ -81,15 +81,41 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
           hlsInstance = new Hls({
             maxBufferLength: 30,
             maxMaxBufferLength: 60,
-            // Add more stability with these options
-            fragLoadingMaxRetry: 5,
-            manifestLoadingMaxRetry: 5,
-            levelLoadingMaxRetry: 5,
-            fragLoadingRetryDelay: 1000,
-            manifestLoadingRetryDelay: 1000,
-            levelLoadingRetryDelay: 1000,
+            // Modern retry policy configuration
+            fragLoadPolicy: {
+              default: {
+                maxTimeToFirstByteMs: 10000,
+                maxLoadTimeMs: 120000,
+                timeoutRetry: {
+                  maxNumRetry: 5,
+                  retryDelayMs: 1000,
+                  maxRetryDelayMs: 0
+                },
+                errorRetry: {
+                  maxNumRetry: 5,
+                  retryDelayMs: 1000,
+                  maxRetryDelayMs: 8000
+                }
+              }
+            },
+            manifestLoadPolicy: {
+              default: {
+                maxTimeToFirstByteMs: 10000,
+                maxLoadTimeMs: 120000,
+                timeoutRetry: {
+                  maxNumRetry: 5,
+                  retryDelayMs: 1000,
+                  maxRetryDelayMs: 0
+                },
+                errorRetry: {
+                  maxNumRetry: 5,
+                  retryDelayMs: 1000,
+                  maxRetryDelayMs: 8000
+                }
+              }
+            },
             // Add debug logs
-            debug: true,
+            debug: false,
             // Use fetch instead of XHR for better CORS handling
             xhrSetup: function(xhr, url) {
               // Log URL being requested

@@ -64,30 +64,65 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   useEffect(() => {
     if (!isAuthenticated || !movieId) return;
     
-    // Get all movies from all categories
-    const allMovies: Movie[] = [];
-    Object.values(contentStore.movies).forEach(categoryMovies => {
-      if (Array.isArray(categoryMovies)) {
-        allMovies.push(...categoryMovies);
+    const fetchMovieData = async () => {
+      try {
+        // Get all movies from all categories
+        const allMovies: Movie[] = [];
+        Object.values(contentStore.movies).forEach(categoryMovies => {
+          if (Array.isArray(categoryMovies)) {
+            allMovies.push(...categoryMovies);
+          }
+        });
+        
+        // Find the movie by ID
+        const movieData = allMovies.find(m => m.stream_id === movieId) || null;
+        
+        if (!movieData) {
+          // If movie not found in store, try to fetch all movies first
+          await contentStore.fetchAllMovies();
+          
+          // Try to find the movie again after fetching
+          const updatedAllMovies: Movie[] = [];
+          Object.values(contentStore.movies).forEach(categoryMovies => {
+            if (Array.isArray(categoryMovies)) {
+              updatedAllMovies.push(...categoryMovies);
+            }
+          });
+          
+          const updatedMovieData = updatedAllMovies.find(m => m.stream_id === movieId) || null;
+          setMovie(updatedMovieData);
+          
+          if (updatedMovieData) {
+            // Fetch TMDB details
+            fetchMovieDetails(updatedMovieData.name);
+            
+            // Get similar movies from the same category
+            const categoryMovies = contentStore.movies[updatedMovieData.category_id] || [];
+            const similar = Array.isArray(categoryMovies) 
+              ? categoryMovies.filter(m => m.stream_id !== movieId).slice(0, 10)
+              : [];
+            setSimilarMovies(similar);
+          }
+        } else {
+          setMovie(movieData);
+          
+          // Fetch TMDB details
+          fetchMovieDetails(movieData.name);
+          
+          // Get similar movies from the same category
+          const categoryMovies = contentStore.movies[movieData.category_id] || [];
+          const similar = Array.isArray(categoryMovies) 
+            ? categoryMovies.filter(m => m.stream_id !== movieId).slice(0, 10)
+            : [];
+          setSimilarMovies(similar);
+        }
+      } catch (error) {
+        console.error('Error fetching movie details:', error);
       }
-    });
+    };
     
-    // Find the movie by ID
-    const movieData = allMovies.find(m => m.stream_id === movieId) || null;
-    setMovie(movieData);
-    
-    if (movieData) {
-      // Fetch TMDB details
-      fetchMovieDetails(movieData.name);
-      
-      // Get similar movies from the same category
-      const categoryMovies = contentStore.movies[movieData.category_id] || [];
-      const similar = Array.isArray(categoryMovies) 
-        ? categoryMovies.filter(m => m.stream_id !== movieId).slice(0, 10)
-        : [];
-      setSimilarMovies(similar);
-    }
-  }, [isAuthenticated, movieId, contentStore.movies, fetchMovieDetails]);
+    fetchMovieData();
+  }, [isAuthenticated, movieId, contentStore, fetchMovieDetails]);
   
   // Update TMDB details when they change
   useEffect(() => {

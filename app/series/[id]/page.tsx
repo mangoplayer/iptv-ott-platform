@@ -70,37 +70,78 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   useEffect(() => {
     if (!isAuthenticated || !seriesId) return;
     
-    // Get all series from all categories
-    const allSeries: TVShow[] = [];
-    Object.values(contentStore.series).forEach(categorySeries => {
-      if (Array.isArray(categorySeries)) {
-        allSeries.push(...categorySeries);
-      }
-    });
-    
-    // Find the series by ID
-    const seriesData = allSeries.find(s => s.series_id === seriesId) || null;
-    setSeries(seriesData);
-    
-    if (seriesData) {
-      // Fetch TMDB details
-      fetchTVShowDetails(seriesData.name);
-      
-      // Get similar series from the same category
-      const categorySeries = contentStore.series[seriesData.category_id] || [];
-      const similar = Array.isArray(categorySeries)
-        ? categorySeries.filter(s => s.series_id !== seriesId).slice(0, 10)
-        : [];
-      setSimilarSeries(similar);
-      
-      // Fetch seasons
-      contentStore.fetchSeriesSeasons(seriesId).then(seasonsData => {
-        setSeasons(seasonsData);
-        if (seasonsData.length > 0) {
-          setSelectedSeason(seasonsData[0].season_number);
+    const fetchSeriesData = async () => {
+      try {
+        // Get all series from all categories
+        const allSeries: TVShow[] = [];
+        Object.values(contentStore.series).forEach(categorySeries => {
+          if (Array.isArray(categorySeries)) {
+            allSeries.push(...categorySeries);
+          }
+        });
+        
+        // Find the series by ID
+        const seriesData = allSeries.find(s => s.series_id === seriesId) || null;
+        
+        if (!seriesData) {
+          // If series not found in store, try to fetch all series first
+          await contentStore.fetchAllSeries();
+          
+          // Try to find the series again after fetching
+          const updatedAllSeries: TVShow[] = [];
+          Object.values(contentStore.series).forEach(categorySeries => {
+            if (Array.isArray(categorySeries)) {
+              updatedAllSeries.push(...categorySeries);
+            }
+          });
+          
+          const updatedSeriesData = updatedAllSeries.find(s => s.series_id === seriesId) || null;
+          setSeries(updatedSeriesData);
+          
+          if (updatedSeriesData) {
+            // Fetch TMDB details
+            fetchTVShowDetails(updatedSeriesData.name);
+            
+            // Get similar series from the same category
+            const categorySeries = contentStore.series[updatedSeriesData.category_id] || [];
+            const similar = Array.isArray(categorySeries)
+              ? categorySeries.filter(s => s.series_id !== seriesId).slice(0, 10)
+              : [];
+            setSimilarSeries(similar);
+            
+            // Fetch seasons
+            const seasonsData = await contentStore.fetchSeriesSeasons(seriesId);
+            setSeasons(seasonsData);
+            if (seasonsData.length > 0) {
+              setSelectedSeason(seasonsData[0].season_number);
+            }
+          }
+        } else {
+          setSeries(seriesData);
+          
+          // Fetch TMDB details
+          fetchTVShowDetails(seriesData.name);
+          
+          // Get similar series from the same category
+          const categorySeries = contentStore.series[seriesData.category_id] || [];
+          const similar = Array.isArray(categorySeries)
+            ? categorySeries.filter(s => s.series_id !== seriesId).slice(0, 10)
+            : [];
+          setSimilarSeries(similar);
+          
+          // Fetch seasons
+          const seasonsData = await contentStore.fetchSeriesSeasons(seriesId);
+          setSeasons(seasonsData);
+          if (seasonsData.length > 0) {
+            setSelectedSeason(seasonsData[0].season_number);
+          }
         }
-      });
-    }
+      } catch (error) {
+        console.error('Error fetching series details:', error);
+      }
+    };
+    
+    fetchSeriesData();
   }, [isAuthenticated, seriesId, contentStore, fetchTVShowDetails]);
   
   // Update TMDB details when they change

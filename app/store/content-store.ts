@@ -45,12 +45,16 @@ interface ContentActions {
   fetchMovieCategories: () => Promise<void>;
   fetchMovies: (categoryId?: string) => Promise<void>;
   fetchMoviesByCategory: (categoryId: string | null) => Promise<void>;
+  fetchAllMovies: () => Promise<void>;
   setSelectedMovieCategory: (categoryId: string | null) => void;
   
   // Series actions
   fetchSeriesCategories: () => Promise<void>;
   fetchSeries: (categoryId?: string) => Promise<void>;
   fetchSeriesByCategory: (categoryId: string | null) => Promise<void>;
+  fetchAllSeries: () => Promise<void>;
+  fetchSeriesSeasons: (seriesId: string) => Promise<any[]>;
+  fetchSeriesEpisodes: (seriesId: string, seasonNumber: string) => Promise<any[]>;
   setSelectedSeriesCategory: (categoryId: string | null) => void;
   
   // Reset store
@@ -316,6 +320,128 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     // If we have a category ID and don't have series for it yet, fetch them
     if (categoryId && !get().series[categoryId]) {
       get().fetchSeries(categoryId);
+    }
+  },
+  
+  // Fetch all movies from all categories
+  fetchAllMovies: async () => {
+    set({ loadingMovies: true, error: null });
+    
+    try {
+      // First, ensure we have categories
+      if (get().movieCategories.length === 0) {
+        await get().fetchMovieCategories();
+      }
+      
+      // Get all categories
+      const categories = get().movieCategories;
+      
+      // Fetch movies for each category
+      const fetchPromises = categories.map(category => 
+        xtreamApi.getVodStreams(category.category_id)
+      );
+      
+      const results = await Promise.all(fetchPromises);
+      
+      // Process results
+      const moviesByCategory: Record<string, Movie[]> = {};
+      
+      categories.forEach((category, index) => {
+        const streams = results[index];
+        const streamsArray = Array.isArray(streams) ? streams : [];
+        
+        // Convert to Movie type
+        const movies: Movie[] = streamsArray.map(stream => ({
+          ...stream,
+        }));
+        
+        moviesByCategory[category.category_id] = movies;
+      });
+      
+      set({ movies: moviesByCategory, loadingMovies: false });
+    } catch (error) {
+      console.error('Error fetching all movies:', error);
+      set({
+        loadingMovies: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch all movies',
+      });
+    }
+  },
+  
+  // Fetch all series from all categories
+  fetchAllSeries: async () => {
+    set({ loadingSeries: true, error: null });
+    
+    try {
+      // First, ensure we have categories
+      if (get().seriesCategories.length === 0) {
+        await get().fetchSeriesCategories();
+      }
+      
+      // Get all categories
+      const categories = get().seriesCategories;
+      
+      // Fetch series for each category
+      const fetchPromises = categories.map(category => 
+        xtreamApi.getSeries(category.category_id)
+      );
+      
+      const results = await Promise.all(fetchPromises);
+      
+      // Process results
+      const seriesByCategory: Record<string, TVShow[]> = {};
+      
+      categories.forEach((category, index) => {
+        const seriesData = results[index];
+        const seriesArray = Array.isArray(seriesData) ? seriesData : [];
+        
+        // Convert to TVShow type
+        const tvShows: TVShow[] = seriesArray.map(series => ({
+          ...series,
+        }));
+        
+        seriesByCategory[category.category_id] = tvShows;
+      });
+      
+      set({ series: seriesByCategory, loadingSeries: false });
+    } catch (error) {
+      console.error('Error fetching all series:', error);
+      set({
+        loadingSeries: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch all series',
+      });
+    }
+  },
+  
+  // Fetch seasons for a series
+  fetchSeriesSeasons: async (seriesId: string) => {
+    try {
+      const seriesInfo = await xtreamApi.getSeriesInfo(Number(seriesId));
+      
+      if (seriesInfo && seriesInfo.seasons) {
+        return Object.values(seriesInfo.seasons);
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error fetching series seasons:', error);
+      return [];
+    }
+  },
+  
+  // Fetch episodes for a season
+  fetchSeriesEpisodes: async (seriesId: string, seasonNumber: string) => {
+    try {
+      const seriesInfo = await xtreamApi.getSeriesInfo(Number(seriesId));
+      
+      if (seriesInfo && seriesInfo.episodes && seriesInfo.episodes[seasonNumber]) {
+        return Object.values(seriesInfo.episodes[seasonNumber]);
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error fetching series episodes:', error);
+      return [];
     }
   },
   
