@@ -34,7 +34,7 @@ interface SeriesDetailPageProps {
 export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const { getSeriesById, getSimilarSeries, fetchSeriesSeasons, fetchSeriesEpisodes, loading } = useContentStore();
+  const contentStore = useContentStore();
   const { playSeriesEpisode } = usePlayerStore();
   const { fetchTVShowDetails, tvShowDetails } = useTMDBStore();
   const { isFavorite, addToFavorites, removeFromFavorites, getWatchedEpisodes } = usePreferencesStore();
@@ -55,8 +55,10 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   
   // Fetch series details
   useEffect(() => {
-    if (isAuthenticated && params.id) {
-      const seriesData = getSeriesById(params.id);
+    if (isAuthenticated && params && typeof params.id === 'string') {
+      const id = params.id;
+      // Use the store data directly
+      const seriesData = contentStore.series.find(s => s.series_id === id) || null;
       setSeries(seriesData);
       
       if (seriesData) {
@@ -64,11 +66,13 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
         fetchTVShowDetails(seriesData.name);
         
         // Get similar series from the same category
-        const similar = getSimilarSeries(seriesData.category_id, params.id);
+        const similar = contentStore.series
+          .filter(s => s.category_id === seriesData.category_id && s.series_id !== id)
+          .slice(0, 10);
         setSimilarSeries(similar);
         
         // Fetch seasons
-        fetchSeriesSeasons(params.id).then(seasonsData => {
+        contentStore.fetchSeriesSeasons(id).then(seasonsData => {
           setSeasons(seasonsData);
           if (seasonsData.length > 0) {
             setSelectedSeason(seasonsData[0].season_number);
@@ -76,7 +80,7 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
         });
       }
     }
-  }, [isAuthenticated, params.id, getSeriesById, fetchTVShowDetails, getSimilarSeries, fetchSeriesSeasons]);
+  }, [isAuthenticated, params, contentStore, fetchTVShowDetails]);
   
   // Update TMDB details when they change
   useEffect(() => {
@@ -87,10 +91,11 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   
   // Fetch episodes when selected season changes
   useEffect(() => {
-    if (isAuthenticated && params.id && selectedSeason) {
+    if (isAuthenticated && params && typeof params.id === 'string' && selectedSeason) {
+      const id = params.id;
       // Check if we already have episodes for this season
       if (!episodes[selectedSeason]) {
-        fetchSeriesEpisodes(params.id, selectedSeason).then(episodesData => {
+        contentStore.fetchSeriesEpisodes(id, selectedSeason).then(episodesData => {
           setEpisodes(prev => ({
             ...prev,
             [selectedSeason]: episodesData
@@ -98,7 +103,7 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
         });
       }
     }
-  }, [isAuthenticated, params.id, selectedSeason, episodes, fetchSeriesEpisodes]);
+  }, [isAuthenticated, params, selectedSeason, episodes, contentStore]);
   
   // Handle favorite toggle
   const handleToggleFavorite = () => {

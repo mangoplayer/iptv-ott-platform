@@ -32,7 +32,7 @@ interface MovieDetailPageProps {
 export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const { getMovieById, getSimilarMovies, loading } = useContentStore();
+  const contentStore = useContentStore();
   const { playMovie } = usePlayerStore();
   const { fetchMovieDetails, movieDetails } = useTMDBStore();
   const { isFavorite, addToFavorites, removeFromFavorites } = usePreferencesStore();
@@ -50,8 +50,10 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   
   // Fetch movie details
   useEffect(() => {
-    if (isAuthenticated && params.id) {
-      const movieData = getMovieById(params.id);
+    if (isAuthenticated && params && typeof params.id === 'string') {
+      const id = params.id;
+      // Use the store functions directly
+      const movieData = contentStore.movies.find(m => m.stream_id === id) || null;
       setMovie(movieData);
       
       if (movieData) {
@@ -59,11 +61,13 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         fetchMovieDetails(movieData.name);
         
         // Get similar movies from the same category
-        const similar = getSimilarMovies(movieData.category_id, params.id);
+        const similar = contentStore.movies
+          .filter(m => m.category_id === movieData.category_id && m.stream_id !== id)
+          .slice(0, 10);
         setSimilarMovies(similar);
       }
     }
-  }, [isAuthenticated, params.id, getMovieById, fetchMovieDetails, getSimilarMovies]);
+  }, [isAuthenticated, params, contentStore.movies, fetchMovieDetails]);
   
   // Update TMDB details when they change
   useEffect(() => {

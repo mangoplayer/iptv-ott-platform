@@ -163,14 +163,20 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
     };
     
     const exitFullscreen = () => {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      } else if ((document as any).mozCancelFullScreen) {
-        (document as any).mozCancelFullScreen();
-      } else if ((document as any).msExitFullscreen) {
-        (document as any).msExitFullscreen();
+      try {
+        if (document.fullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if ((document as any).webkitExitFullscreen) {
+            (document as any).webkitExitFullscreen();
+          } else if ((document as any).mozCancelFullScreen) {
+            (document as any).mozCancelFullScreen();
+          } else if ((document as any).msExitFullscreen) {
+            (document as any).msExitFullscreen();
+          }
+        }
+      } catch (error) {
+        console.error('Error exiting fullscreen:', error);
       }
     };
     
@@ -179,6 +185,19 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
     } else {
       exitFullscreen();
     }
+    
+    // Cleanup function to handle component unmounting
+    return () => {
+      if (isFullscreen) {
+        try {
+          if (document.fullscreenElement) {
+            exitFullscreen();
+          }
+        } catch (error) {
+          console.error('Error cleaning up fullscreen:', error);
+        }
+      }
+    };
   }, [isFullscreen]);
   
   // Handle controls visibility
