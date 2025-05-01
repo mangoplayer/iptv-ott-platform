@@ -91,20 +91,20 @@ export function ContentCard({
       {/* Image */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10" />
       
-      {imageUrl ? (
-        <Image
-          src={imageUrl}
-          alt={name}
-          fill
-          className="object-cover transition-transform group-hover:scale-110"
-          sizes={width ? `${width}px` : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'}
-          unoptimized={true} // Disable optimization for external images
-        />
-      ) : (
-        <div className="absolute inset-0 bg-muted flex items-center justify-center">
-          <span className="text-muted-foreground">{name.charAt(0)}</span>
-        </div>
-      )}
+      <Image
+        src={imageUrl}
+        alt={name}
+        fill
+        className="object-cover transition-transform group-hover:scale-110"
+        sizes={width ? `${width}px` : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw'}
+        unoptimized={true} // Disable optimization for external images
+        onError={(e) => {
+          // If image fails to load, replace with a fallback
+          const target = e.target as HTMLImageElement;
+          target.onerror = null; // Prevent infinite error loop
+          target.src = `/images/placeholder-${type}.jpg`;
+        }}
+      />
       
       {/* Content */}
       <div className="absolute bottom-0 left-0 right-0 p-3 z-20">
