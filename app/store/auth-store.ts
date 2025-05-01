@@ -25,11 +25,11 @@ export const useAuthStore = create<AuthStore>()(
       initializeApi: () => {
         const { isAuthenticated, serverUrl, user } = get();
         
-        if (isAuthenticated && serverUrl && user) {
+        if (isAuthenticated && serverUrl && user && user.password) {
           xtreamApi.initialize({
             serverUrl,
             username: user.username,
-            password: '', // We don't store the password for security reasons
+            password: user.password,
           });
           console.log('API initialized from stored credentials');
         }
