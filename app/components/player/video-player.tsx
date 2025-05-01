@@ -62,7 +62,14 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
   useEffect(() => {
     if (!videoRef.current || !source) return;
     
+    // Clean up previous instance if it exists
+    if (hls) {
+      hls.destroy();
+      setHls(null);
+    }
+    
     let hlsInstance: Hls | null = null;
+    let playAttempted = false;
     
     const initializePlayer = () => {
       if (Hls.isSupported()) {
@@ -75,10 +82,20 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
         hlsInstance.attachMedia(videoRef.current!);
         
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (isPlaying && videoRef.current) {
-            videoRef.current.play().catch(error => {
-              console.error('Error playing video:', error);
-            });
+          if (isPlaying && videoRef.current && !playAttempted) {
+            playAttempted = true;
+            // Add a small delay before attempting to play
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.play().catch(error => {
+                  console.error('Error playing video:', error);
+                  // If autoplay was prevented, we can try again with user interaction
+                  if (error.name === 'NotAllowedError') {
+                    console.log('Autoplay prevented, waiting for user interaction');
+                  }
+                });
+              }
+            }, 100);
           }
         });
         
@@ -113,21 +130,32 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
     return () => {
       if (hlsInstance) {
         hlsInstance.destroy();
-        setHls(null);
       }
     };
-  }, [source, isPlaying]);
+  }, [source]);
   
   // Handle play/pause
   useEffect(() => {
     if (!videoRef.current) return;
     
     if (isPlaying) {
-      videoRef.current.play().catch(error => {
-        console.error('Error playing video:', error);
-      });
+      // Add a small delay to avoid rapid play/pause calls
+      const playPromise = videoRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.error('Error playing video:', error);
+          // If autoplay was prevented, we can try again with user interaction
+          if (error.name === 'NotAllowedError') {
+            console.log('Autoplay prevented, waiting for user interaction');
+          }
+        });
+      }
     } else {
-      videoRef.current.pause();
+      // Check if the video is actually playing before pausing
+      if (!videoRef.current.paused) {
+        videoRef.current.pause();
+      }
     }
   }, [isPlaying]);
   

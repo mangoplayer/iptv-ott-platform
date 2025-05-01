@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import React from 'react';
 import { useAuthStore } from '@/app/store/auth-store';
 import { useContentStore } from '@/app/store/content-store';
 import { usePlayerStore } from '@/app/store/player-store';
@@ -26,9 +27,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface SeriesDetailPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
@@ -45,6 +46,17 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   const [seasons, setSeasons] = useState<TVShowSeason[]>([]);
   const [episodes, setEpisodes] = useState<Record<string, TVShowEpisode[]>>({});
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
+  const [seriesId, setSeriesId] = useState<string | null>(null);
+  
+  // Unwrap params
+  useEffect(() => {
+    const getParams = async () => {
+      const resolvedParams = await params;
+      setSeriesId(resolvedParams.id);
+    };
+    
+    getParams();
+  }, [params]);
   
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -55,32 +67,40 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   
   // Fetch series details
   useEffect(() => {
-    if (isAuthenticated && params && typeof params.id === 'string') {
-      const id = params.id;
-      // Use the store data directly
-      const seriesData = contentStore.series.find(s => s.series_id === id) || null;
-      setSeries(seriesData);
-      
-      if (seriesData) {
-        // Fetch TMDB details
-        fetchTVShowDetails(seriesData.name);
-        
-        // Get similar series from the same category
-        const similar = contentStore.series
-          .filter(s => s.category_id === seriesData.category_id && s.series_id !== id)
-          .slice(0, 10);
-        setSimilarSeries(similar);
-        
-        // Fetch seasons
-        contentStore.fetchSeriesSeasons(id).then(seasonsData => {
-          setSeasons(seasonsData);
-          if (seasonsData.length > 0) {
-            setSelectedSeason(seasonsData[0].season_number);
-          }
-        });
+    if (!isAuthenticated || !seriesId) return;
+    
+    // Get all series from all categories
+    const allSeries: TVShow[] = [];
+    Object.values(contentStore.series).forEach(categorySeries => {
+      if (Array.isArray(categorySeries)) {
+        allSeries.push(...categorySeries);
       }
+    });
+    
+    // Find the series by ID
+    const seriesData = allSeries.find(s => s.series_id === seriesId) || null;
+    setSeries(seriesData);
+    
+    if (seriesData) {
+      // Fetch TMDB details
+      fetchTVShowDetails(seriesData.name);
+      
+      // Get similar series from the same category
+      const categorySeries = contentStore.series[seriesData.category_id] || [];
+      const similar = Array.isArray(categorySeries)
+        ? categorySeries.filter(s => s.series_id !== seriesId).slice(0, 10)
+        : [];
+      setSimilarSeries(similar);
+      
+      // Fetch seasons
+      contentStore.fetchSeriesSeasons(seriesId).then(seasonsData => {
+        setSeasons(seasonsData);
+        if (seasonsData.length > 0) {
+          setSelectedSeason(seasonsData[0].season_number);
+        }
+      });
     }
-  }, [isAuthenticated, params, contentStore, fetchTVShowDetails]);
+  }, [isAuthenticated, seriesId, contentStore, fetchTVShowDetails]);
   
   // Update TMDB details when they change
   useEffect(() => {
@@ -91,11 +111,10 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
   
   // Fetch episodes when selected season changes
   useEffect(() => {
-    if (isAuthenticated && params && typeof params.id === 'string' && selectedSeason) {
-      const id = params.id;
+    if (isAuthenticated && seriesId && selectedSeason) {
       // Check if we already have episodes for this season
       if (!episodes[selectedSeason]) {
-        contentStore.fetchSeriesEpisodes(id, selectedSeason).then(episodesData => {
+        contentStore.fetchSeriesEpisodes(seriesId, selectedSeason).then(episodesData => {
           setEpisodes(prev => ({
             ...prev,
             [selectedSeason]: episodesData
@@ -103,7 +122,7 @@ export default function SeriesDetailPage({ params }: SeriesDetailPageProps) {
         });
       }
     }
-  }, [isAuthenticated, params, selectedSeason, episodes, contentStore]);
+  }, [isAuthenticated, seriesId, selectedSeason, episodes, contentStore]);
   
   // Handle favorite toggle
   const handleToggleFavorite = () => {

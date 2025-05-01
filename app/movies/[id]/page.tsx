@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import React from 'react';
 import { useAuthStore } from '@/app/store/auth-store';
 import { useContentStore } from '@/app/store/content-store';
 import { usePlayerStore } from '@/app/store/player-store';
@@ -24,9 +25,9 @@ import {
 } from 'lucide-react';
 
 interface MovieDetailPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function MovieDetailPage({ params }: MovieDetailPageProps) {
@@ -40,6 +41,17 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const [movie, setMovie] = useState<Movie | null>(null);
   const [similarMovies, setSimilarMovies] = useState<Movie[]>([]);
   const [tmdbDetails, setTmdbDetails] = useState<TMDBMovie | null>(null);
+  const [movieId, setMovieId] = useState<string | null>(null);
+  
+  // Unwrap params
+  useEffect(() => {
+    const getParams = async () => {
+      const resolvedParams = await params;
+      setMovieId(resolvedParams.id);
+    };
+    
+    getParams();
+  }, [params]);
   
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -50,24 +62,32 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   
   // Fetch movie details
   useEffect(() => {
-    if (isAuthenticated && params && typeof params.id === 'string') {
-      const id = params.id;
-      // Use the store functions directly
-      const movieData = contentStore.movies.find(m => m.stream_id === id) || null;
-      setMovie(movieData);
-      
-      if (movieData) {
-        // Fetch TMDB details
-        fetchMovieDetails(movieData.name);
-        
-        // Get similar movies from the same category
-        const similar = contentStore.movies
-          .filter(m => m.category_id === movieData.category_id && m.stream_id !== id)
-          .slice(0, 10);
-        setSimilarMovies(similar);
+    if (!isAuthenticated || !movieId) return;
+    
+    // Get all movies from all categories
+    const allMovies: Movie[] = [];
+    Object.values(contentStore.movies).forEach(categoryMovies => {
+      if (Array.isArray(categoryMovies)) {
+        allMovies.push(...categoryMovies);
       }
+    });
+    
+    // Find the movie by ID
+    const movieData = allMovies.find(m => m.stream_id === movieId) || null;
+    setMovie(movieData);
+    
+    if (movieData) {
+      // Fetch TMDB details
+      fetchMovieDetails(movieData.name);
+      
+      // Get similar movies from the same category
+      const categoryMovies = contentStore.movies[movieData.category_id] || [];
+      const similar = Array.isArray(categoryMovies) 
+        ? categoryMovies.filter(m => m.stream_id !== movieId).slice(0, 10)
+        : [];
+      setSimilarMovies(similar);
     }
-  }, [isAuthenticated, params, contentStore.movies, fetchMovieDetails]);
+  }, [isAuthenticated, movieId, contentStore.movies, fetchMovieDetails]);
   
   // Update TMDB details when they change
   useEffect(() => {
