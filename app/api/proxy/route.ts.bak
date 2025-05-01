@@ -1,0 +1,239 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cache } from 'react';
+
+// Cache for 5 minutes by default
+export const dynamic = 'force-dynamic';
+export const revalidate = 300;
+
+// Simple in-memory cache for rate limiting
+const requestCache = new Map<string, { data: any; timestamp: number }>();
+const requestQueue = new Map<string, Promise<any>>();
+const rateLimit = new Map<string, { count: number; resetTime: number }>();
+
+// Cache GET requests
+const cachedFetch = cache(async (cacheKey: string, url: string, options: RequestInit) => {
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+    
+    const contentType = response.headers.get('content-type');
+    if (contentType?.includes('application/json')) {
+      return await response.json();
+    } else {
+      return await response.text();
+    }
+  } catch (error) {
+    console.error(`Error fetching ${url}:`, error);
+    throw error;
+  }
+});
+
+// Helper to generate a cache key from request details
+function generateCacheKey(url: string, method: string, data: any): string {
+  const baseKey = `${method}:${url}`;
+  if (data && method === 'GET') {
+    return `${baseKey}:${JSON.stringify(data)}`;
+  }
+  return baseKey;
+}
+
+// Helper to check and update rate limits
+function checkRateLimit(domain: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const limit = rateLimit.get(domain) || { count: 0, resetTime: now + 60000 }; // 1 minute window
+  
+  // Reset counter if the window has passed
+  if (now > limit.resetTime) {
+    limit.count = 0;
+    limit.resetTime = now + 60000;
+  }
+  
+  // Check if we're over the limit (20 requests per minute per domain)
+  if (limit.count >= 20) {
+    const retryAfter = Math.ceil((limit.resetTime - now) / 1000);
+    return { allowed: false, retryAfter };
+  }
+  
+  // Increment the counter
+  limit.count++;
+  rateLimit.set(domain, limit);
+  
+  return { allowed: true };
+}
+
+// Retry logic with exponential backoff
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  let retries = 0;
+  
+  while (true) {
+    try {
+      const response = await fetch(url, options);
+      
+      // If we get a 429, wait and retry
+      if (response.status === 429) {
+        if (retries >= maxRetries) {
+          console.error(`Max retries reached for ${url}`);
+          return response; // Return the 429 response after max retries
+        }
+        
+        // Get retry-after header or use exponential backoff
+        const retryAfter = response.headers.get('retry-after');
+        const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, retries) * 1000;
+        
+        console.log(`Rate limited, waiting ${waitTime}ms before retry ${retries + 1}/${maxRetries}`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        retries++;
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      if (retries >= maxRetries) {
+        console.error(`Max retries reached for ${url}`);
+        throw error;
+      }
+      
+      const waitTime = Math.pow(2, retries) * 1000;
+      console.log(`Network error, waiting ${waitTime}ms before retry ${retries + 1}/${maxRetries}`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      retries++;
+    }
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { url, method = 'GET', headers = {}, data = null, bypassCache = false } = body;
+
+    if (!url) {
+      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    }
+    
+    // Extract domain for rate limiting
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname;
+    
+    // Check rate limit
+    const rateLimitCheck = checkRateLimit(domain);
+    if (!rateLimitCheck.allowed) {
+      console.log(`Rate limit exceeded for ${domain}, retry after ${rateLimitCheck.retryAfter}s`);
+      return NextResponse.json(
+        { error: 'Rate limit exceeded', retryAfter: rateLimitCheck.retryAfter },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimitCheck.retryAfter || 60)
+          }
+        }
+      );
+    }
+
+    const fetchOptions: RequestInit = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      cache: 'no-store',
+    };
+
+    if (data && method !== 'GET') {
+      fetchOptions.body = JSON.stringify(data);
+    }
+
+    // For GET requests with data, append as query params
+    let fetchUrl = url;
+    if (method === 'GET' && data) {
+      const queryParams = new URLSearchParams();
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, String(value));
+        }
+      });
+      
+      fetchUrl = `${url}${url.includes('?') ? '&' : '?'}${queryParams.toString()}`;
+    }
+
+    // Generate cache key
+    const cacheKey = generateCacheKey(fetchUrl, method, data);
+    
+    // Check if we have a cached response and it's not expired (5 minutes)
+    const now = Date.now();
+    const cachedResponse = requestCache.get(cacheKey);
+    
+    if (!bypassCache && method === 'GET' && cachedResponse && (now - cachedResponse.timestamp < 5 * 60 * 1000)) {
+      console.log(`Using cached response for: ${fetchUrl}`);
+      return NextResponse.json(cachedResponse.data);
+    }
+    
+    // Check if this request is already in progress
+    if (requestQueue.has(cacheKey)) {
+      console.log(`Request already in progress for: ${fetchUrl}, reusing promise`);
+      try {
+        const data = await requestQueue.get(cacheKey);
+        return NextResponse.json(data);
+      } catch (error) {
+        console.error(`Error from queued request for ${fetchUrl}:`, error);
+        // Continue with a new request if the queued one failed
+      }
+    }
+    
+    // Create a new request promise
+    console.log(`Proxying request to: ${fetchUrl}`);
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetchWithRetry(fetchUrl, fetchOptions);
+        
+        if (!response.ok) {
+          console.error(`Proxy error: ${response.status} ${response.statusText}`);
+          throw new Error(`Proxy request failed with status ${response.status}`);
+        }
+    
+        const contentType = response.headers.get('content-type');
+        let responseData;
+        
+        if (contentType?.includes('application/json')) {
+          responseData = await response.json();
+        } else {
+          responseData = await response.text();
+        }
+        
+        // Cache successful GET responses
+        if (method === 'GET') {
+          requestCache.set(cacheKey, { data: responseData, timestamp: now });
+        }
+        
+        return responseData;
+      } finally {
+        // Remove from queue when done
+        requestQueue.delete(cacheKey);
+      }
+    })();
+    
+    // Add to queue
+    requestQueue.set(cacheKey, fetchPromise);
+    
+    // Wait for the result
+    const result = await fetchPromise;
+    
+    // Return the appropriate response
+    if (typeof result === 'string') {
+      return new NextResponse(result, {
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+      });
+    } else {
+      return NextResponse.json(result);
+    }
+  } catch (error) {
+    console.error('Proxy error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}

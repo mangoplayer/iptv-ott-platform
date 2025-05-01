@@ -106,44 +106,90 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     set({ loadingLiveChannels: true, error: null });
     
     try {
-      const streams = await xtreamApi.getLiveStreams(categoryId);
+      // If we already have channels for this category, use them
+      if (categoryId && get().liveChannels[categoryId]?.length > 0) {
+        console.log(`Using cached live channels for category ${categoryId}`);
+        set({ loadingLiveChannels: false });
+        return;
+      }
       
-      // Ensure streams is an array
-      const streamsArray = Array.isArray(streams) ? streams : [];
+      // Try up to 3 times with exponential backoff
+      let attempt = 0;
+      let success = false;
+      let lastError: any = null;
       
-      // Convert to LiveChannel type
-      const channels: LiveChannel[] = streamsArray.map(stream => ({
-        ...stream,
-      }));
+      while (attempt < 3 && !success) {
+        try {
+          if (attempt > 0) {
+            console.log(`Retrying live channels fetch (attempt ${attempt + 1}/3) for category ${categoryId || 'all'}`);
+            // Wait with exponential backoff
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+          }
+          
+          const streams = await xtreamApi.getLiveStreams(categoryId);
+          
+          // Ensure streams is an array
+          const streamsArray = Array.isArray(streams) ? streams : [];
+          
+          // Convert to LiveChannel type
+          const channels: LiveChannel[] = streamsArray.map(stream => ({
+            ...stream,
+          }));
+          
+          // Update state based on whether a category was specified
+          if (categoryId) {
+            set(state => ({
+              liveChannels: {
+                ...state.liveChannels,
+                [categoryId]: channels,
+              },
+              loadingLiveChannels: false,
+            }));
+          } else {
+            // If no category specified, create a map of all channels by category
+            const channelsByCategory: Record<string, LiveChannel[]> = {};
+            
+            channels.forEach(channel => {
+              if (!channelsByCategory[channel.category_id]) {
+                channelsByCategory[channel.category_id] = [];
+              }
+              channelsByCategory[channel.category_id].push(channel);
+            });
+            
+            set({ liveChannels: channelsByCategory, loadingLiveChannels: false });
+          }
+          
+          success = true;
+        } catch (error) {
+          lastError = error;
+          console.error(`Error fetching live channels (attempt ${attempt + 1}/3):`, error);
+          attempt++;
+          
+          // If this was the last attempt, propagate the error
+          if (attempt >= 3) {
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching live channels after retries:', error);
       
-      // Update state based on whether a category was specified
+      // If we have a specific category, set an empty array to prevent repeated fetch attempts
       if (categoryId) {
         set(state => ({
           liveChannels: {
             ...state.liveChannels,
-            [categoryId]: channels,
+            [categoryId]: [],
           },
           loadingLiveChannels: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch live TV channels',
         }));
       } else {
-        // If no category specified, create a map of all channels by category
-        const channelsByCategory: Record<string, LiveChannel[]> = {};
-        
-        channels.forEach(channel => {
-          if (!channelsByCategory[channel.category_id]) {
-            channelsByCategory[channel.category_id] = [];
-          }
-          channelsByCategory[channel.category_id].push(channel);
+        set({
+          loadingLiveChannels: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch live TV channels',
         });
-        
-        set({ liveChannels: channelsByCategory, loadingLiveChannels: false });
       }
-    } catch (error) {
-      console.error('Error fetching live channels:', error);
-      set({
-        loadingLiveChannels: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch live TV channels',
-      });
     }
   },
   
@@ -185,44 +231,90 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     set({ loadingMovies: true, error: null });
     
     try {
-      const streams = await xtreamApi.getVodStreams(categoryId);
+      // If we already have movies for this category, use them
+      if (categoryId && get().movies[categoryId]?.length > 0) {
+        console.log(`Using cached movies for category ${categoryId}`);
+        set({ loadingMovies: false });
+        return;
+      }
       
-      // Ensure streams is an array
-      const streamsArray = Array.isArray(streams) ? streams : [];
+      // Try up to 3 times with exponential backoff
+      let attempt = 0;
+      let success = false;
+      let lastError: any = null;
       
-      // Convert to Movie type
-      const movies: Movie[] = streamsArray.map(stream => ({
-        ...stream,
-      }));
+      while (attempt < 3 && !success) {
+        try {
+          if (attempt > 0) {
+            console.log(`Retrying movie fetch (attempt ${attempt + 1}/3) for category ${categoryId || 'all'}`);
+            // Wait with exponential backoff
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+          }
+          
+          const streams = await xtreamApi.getVodStreams(categoryId);
+          
+          // Ensure streams is an array
+          const streamsArray = Array.isArray(streams) ? streams : [];
+          
+          // Convert to Movie type
+          const movies: Movie[] = streamsArray.map(stream => ({
+            ...stream,
+          }));
+          
+          // Update state based on whether a category was specified
+          if (categoryId) {
+            set(state => ({
+              movies: {
+                ...state.movies,
+                [categoryId]: movies,
+              },
+              loadingMovies: false,
+            }));
+          } else {
+            // If no category specified, create a map of all movies by category
+            const moviesByCategory: Record<string, Movie[]> = {};
+            
+            movies.forEach(movie => {
+              if (!moviesByCategory[movie.category_id]) {
+                moviesByCategory[movie.category_id] = [];
+              }
+              moviesByCategory[movie.category_id].push(movie);
+            });
+            
+            set({ movies: moviesByCategory, loadingMovies: false });
+          }
+          
+          success = true;
+        } catch (error) {
+          lastError = error;
+          console.error(`Error fetching movies (attempt ${attempt + 1}/3):`, error);
+          attempt++;
+          
+          // If this was the last attempt, propagate the error
+          if (attempt >= 3) {
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching movies after retries:', error);
       
-      // Update state based on whether a category was specified
+      // If we have a specific category, set an empty array to prevent repeated fetch attempts
       if (categoryId) {
         set(state => ({
           movies: {
             ...state.movies,
-            [categoryId]: movies,
+            [categoryId]: [],
           },
           loadingMovies: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch movies',
         }));
       } else {
-        // If no category specified, create a map of all movies by category
-        const moviesByCategory: Record<string, Movie[]> = {};
-        
-        movies.forEach(movie => {
-          if (!moviesByCategory[movie.category_id]) {
-            moviesByCategory[movie.category_id] = [];
-          }
-          moviesByCategory[movie.category_id].push(movie);
+        set({
+          loadingMovies: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch movies',
         });
-        
-        set({ movies: moviesByCategory, loadingMovies: false });
       }
-    } catch (error) {
-      console.error('Error fetching movies:', error);
-      set({
-        loadingMovies: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch movies',
-      });
     }
   },
   
@@ -264,44 +356,90 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     set({ loadingSeries: true, error: null });
     
     try {
-      const seriesData = await xtreamApi.getSeries(categoryId);
+      // If we already have series for this category, use them
+      if (categoryId && get().series[categoryId]?.length > 0) {
+        console.log(`Using cached series for category ${categoryId}`);
+        set({ loadingSeries: false });
+        return;
+      }
       
-      // Ensure seriesData is an array
-      const seriesArray = Array.isArray(seriesData) ? seriesData : [];
+      // Try up to 3 times with exponential backoff
+      let attempt = 0;
+      let success = false;
+      let lastError: any = null;
       
-      // Convert to TVShow type
-      const tvShows: TVShow[] = seriesArray.map(series => ({
-        ...series,
-      }));
+      while (attempt < 3 && !success) {
+        try {
+          if (attempt > 0) {
+            console.log(`Retrying series fetch (attempt ${attempt + 1}/3) for category ${categoryId || 'all'}`);
+            // Wait with exponential backoff
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+          }
+          
+          const seriesData = await xtreamApi.getSeries(categoryId);
+          
+          // Ensure seriesData is an array
+          const seriesArray = Array.isArray(seriesData) ? seriesData : [];
+          
+          // Convert to TVShow type
+          const tvShows: TVShow[] = seriesArray.map(series => ({
+            ...series,
+          }));
+          
+          // Update state based on whether a category was specified
+          if (categoryId) {
+            set(state => ({
+              series: {
+                ...state.series,
+                [categoryId]: tvShows,
+              },
+              loadingSeries: false,
+            }));
+          } else {
+            // If no category specified, create a map of all series by category
+            const seriesByCategory: Record<string, TVShow[]> = {};
+            
+            tvShows.forEach(show => {
+              if (!seriesByCategory[show.category_id]) {
+                seriesByCategory[show.category_id] = [];
+              }
+              seriesByCategory[show.category_id].push(show);
+            });
+            
+            set({ series: seriesByCategory, loadingSeries: false });
+          }
+          
+          success = true;
+        } catch (error) {
+          lastError = error;
+          console.error(`Error fetching series (attempt ${attempt + 1}/3):`, error);
+          attempt++;
+          
+          // If this was the last attempt, propagate the error
+          if (attempt >= 3) {
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching series after retries:', error);
       
-      // Update state based on whether a category was specified
+      // If we have a specific category, set an empty array to prevent repeated fetch attempts
       if (categoryId) {
         set(state => ({
           series: {
             ...state.series,
-            [categoryId]: tvShows,
+            [categoryId]: [],
           },
           loadingSeries: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch TV series',
         }));
       } else {
-        // If no category specified, create a map of all series by category
-        const seriesByCategory: Record<string, TVShow[]> = {};
-        
-        tvShows.forEach(show => {
-          if (!seriesByCategory[show.category_id]) {
-            seriesByCategory[show.category_id] = [];
-          }
-          seriesByCategory[show.category_id].push(show);
+        set({
+          loadingSeries: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch TV series',
         });
-        
-        set({ series: seriesByCategory, loadingSeries: false });
       }
-    } catch (error) {
-      console.error('Error fetching series:', error);
-      set({
-        loadingSeries: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch TV series',
-      });
     }
   },
   
@@ -323,7 +461,7 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     }
   },
   
-  // Fetch all movies from all categories
+  // Fetch all movies from all categories with batch processing
   fetchAllMovies: async () => {
     set({ loadingMovies: true, error: null });
     
@@ -336,29 +474,66 @@ export const useContentStore = create<ContentStore>((set, get) => ({
       // Get all categories
       const categories = get().movieCategories;
       
-      // Fetch movies for each category
-      const fetchPromises = categories.map(category => 
-        xtreamApi.getVodStreams(category.category_id)
-      );
+      // Process in batches to avoid rate limiting
+      const batchSize = 3; // Process 3 categories at a time
+      const moviesByCategory: Record<string, Movie[]> = { ...get().movies };
       
-      const results = await Promise.all(fetchPromises);
-      
-      // Process results
-      const moviesByCategory: Record<string, Movie[]> = {};
-      
-      categories.forEach((category, index) => {
-        const streams = results[index];
-        const streamsArray = Array.isArray(streams) ? streams : [];
+      // Process categories in batches
+      for (let i = 0; i < categories.length; i += batchSize) {
+        const batch = categories.slice(i, i + batchSize);
+        console.log(`Processing movie categories batch ${i/batchSize + 1}/${Math.ceil(categories.length/batchSize)}`);
         
-        // Convert to Movie type
-        const movies: Movie[] = streamsArray.map(stream => ({
-          ...stream,
-        }));
-        
-        moviesByCategory[category.category_id] = movies;
-      });
+        try {
+          // Fetch movies for each category in the batch
+          const fetchPromises = batch.map(category => {
+            // Skip categories we already have data for
+            if (moviesByCategory[category.category_id]?.length > 0) {
+              console.log(`Using cached movies for category ${category.category_id}`);
+              return Promise.resolve(moviesByCategory[category.category_id]);
+            }
+            
+            return xtreamApi.getVodStreams(category.category_id);
+          });
+          
+          const results = await Promise.allSettled(fetchPromises);
+          
+          // Process results
+          batch.forEach((category, index) => {
+            const result = results[index];
+            
+            if (result.status === 'fulfilled') {
+              const streams = result.value;
+              
+              // Skip if we already have this data from cache
+              if (Array.isArray(streams) && streams.length > 0 && 'stream_id' in streams[0]) {
+                // Convert to Movie type
+                const movies: Movie[] = streams.map(stream => ({
+                  ...stream,
+                }));
+                
+                moviesByCategory[category.category_id] = movies;
+              }
+            } else {
+              console.error(`Failed to fetch movies for category ${category.category_id}:`, result.reason);
+              // Initialize with empty array to prevent repeated fetch attempts
+              moviesByCategory[category.category_id] = [];
+            }
+          });
+          
+          // Update state after each batch to show progress
+          set({ movies: { ...moviesByCategory } });
+          
+          // Add a small delay between batches to avoid rate limiting
+          if (i + batchSize < categories.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (batchError) {
+          console.error(`Error processing movie batch ${i/batchSize + 1}:`, batchError);
+          // Continue with next batch despite errors
+        }
+      }
       
-      set({ movies: moviesByCategory, loadingMovies: false });
+      set({ loadingMovies: false });
     } catch (error) {
       console.error('Error fetching all movies:', error);
       set({
@@ -368,7 +543,7 @@ export const useContentStore = create<ContentStore>((set, get) => ({
     }
   },
   
-  // Fetch all series from all categories
+  // Fetch all series from all categories with batch processing
   fetchAllSeries: async () => {
     set({ loadingSeries: true, error: null });
     
@@ -381,29 +556,66 @@ export const useContentStore = create<ContentStore>((set, get) => ({
       // Get all categories
       const categories = get().seriesCategories;
       
-      // Fetch series for each category
-      const fetchPromises = categories.map(category => 
-        xtreamApi.getSeries(category.category_id)
-      );
+      // Process in batches to avoid rate limiting
+      const batchSize = 3; // Process 3 categories at a time
+      const seriesByCategory: Record<string, TVShow[]> = { ...get().series };
       
-      const results = await Promise.all(fetchPromises);
-      
-      // Process results
-      const seriesByCategory: Record<string, TVShow[]> = {};
-      
-      categories.forEach((category, index) => {
-        const seriesData = results[index];
-        const seriesArray = Array.isArray(seriesData) ? seriesData : [];
+      // Process categories in batches
+      for (let i = 0; i < categories.length; i += batchSize) {
+        const batch = categories.slice(i, i + batchSize);
+        console.log(`Processing series categories batch ${i/batchSize + 1}/${Math.ceil(categories.length/batchSize)}`);
         
-        // Convert to TVShow type
-        const tvShows: TVShow[] = seriesArray.map(series => ({
-          ...series,
-        }));
-        
-        seriesByCategory[category.category_id] = tvShows;
-      });
+        try {
+          // Fetch series for each category in the batch
+          const fetchPromises = batch.map(category => {
+            // Skip categories we already have data for
+            if (seriesByCategory[category.category_id]?.length > 0) {
+              console.log(`Using cached series for category ${category.category_id}`);
+              return Promise.resolve(seriesByCategory[category.category_id]);
+            }
+            
+            return xtreamApi.getSeries(category.category_id);
+          });
+          
+          const results = await Promise.allSettled(fetchPromises);
+          
+          // Process results
+          batch.forEach((category, index) => {
+            const result = results[index];
+            
+            if (result.status === 'fulfilled') {
+              const seriesData = result.value;
+              
+              // Skip if we already have this data from cache
+              if (Array.isArray(seriesData) && seriesData.length > 0 && 'series_id' in seriesData[0]) {
+                // Convert to TVShow type
+                const tvShows: TVShow[] = seriesData.map(series => ({
+                  ...series,
+                }));
+                
+                seriesByCategory[category.category_id] = tvShows;
+              }
+            } else {
+              console.error(`Failed to fetch series for category ${category.category_id}:`, result.reason);
+              // Initialize with empty array to prevent repeated fetch attempts
+              seriesByCategory[category.category_id] = [];
+            }
+          });
+          
+          // Update state after each batch to show progress
+          set({ series: { ...seriesByCategory } });
+          
+          // Add a small delay between batches to avoid rate limiting
+          if (i + batchSize < categories.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (batchError) {
+          console.error(`Error processing series batch ${i/batchSize + 1}:`, batchError);
+          // Continue with next batch despite errors
+        }
+      }
       
-      set({ series: seriesByCategory, loadingSeries: false });
+      set({ loadingSeries: false });
     } catch (error) {
       console.error('Error fetching all series:', error);
       set({

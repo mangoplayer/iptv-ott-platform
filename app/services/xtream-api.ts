@@ -14,21 +14,64 @@ import {
   XtreamVodStream,
 } from '../types/xtream';
 
-// Helper function to use proxy for API requests
-async function proxyRequest<T>(url: string, params: Record<string, any>): Promise<T> {
-  try {
-    // Use our proxy API route
-    const response = await axios.post('/api/proxy', {
-      url,
-      method: 'GET',
-      data: params,
-    });
-    
-    return response.data;
-  } catch (error) {
-    console.error('Proxy request failed:', error);
-    throw error;
+// Helper function to use proxy for API requests with retry logic
+async function proxyRequest<T>(
+  url: string, 
+  params: Record<string, any>, 
+  options: { 
+    bypassCache?: boolean;
+    retries?: number;
+    retryDelay?: number;
+  } = {}
+): Promise<T> {
+  const { bypassCache = false, retries = 3, retryDelay = 1000 } = options;
+  let lastError: any = null;
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      // Use our proxy API route
+      const response = await axios.post('/api/proxy', {
+        url,
+        method: 'GET',
+        data: params,
+        bypassCache,
+      });
+      
+      return response.data;
+    } catch (error: any) {
+      lastError = error;
+      
+      // If we get a 429 Too Many Requests error
+      if (error.response?.status === 429) {
+        const retryAfter = error.response.headers['retry-after'] || 
+                          error.response.data?.retryAfter || 
+                          Math.pow(2, attempt);
+                          
+        console.log(`Rate limited (429), waiting ${retryAfter}s before retry ${attempt + 1}/${retries}`);
+        
+        // Wait before retrying
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          continue;
+        }
+      }
+      
+      // For other errors, use exponential backoff if we have retries left
+      if (attempt < retries) {
+        const waitTime = retryDelay * Math.pow(2, attempt);
+        console.log(`Request failed, waiting ${waitTime}ms before retry ${attempt + 1}/${retries}`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      // If we've exhausted all retries or it's not a retryable error
+      console.error('Proxy request failed after retries:', error);
+      throw error;
+    }
   }
+  
+  // This should never happen, but TypeScript needs it
+  throw lastError;
 }
 
 class XtreamAPI {
