@@ -83,58 +83,79 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
           Hls.DefaultConfig.debug = true;
           
           hlsInstance = new Hls({
-            maxBufferLength: 30,
-            maxMaxBufferLength: 60,
-            // Modern retry policy configuration
+            // Buffer configuration
+            maxBufferLength: 60, // Increased buffer length
+            maxMaxBufferLength: 120, // Maximum buffer length
+            maxBufferSize: 60 * 1000 * 1000, // 60MB buffer size
+            maxBufferHole: 0.5, // Maximum buffer holes
+            
+            // Retry and timeout configuration
             fragLoadPolicy: {
               default: {
-                maxTimeToFirstByteMs: 20000, // Increased timeout
-                maxLoadTimeMs: 120000,
+                maxTimeToFirstByteMs: 30000, // 30s timeout for first byte
+                maxLoadTimeMs: 120000, // 120s total timeout
                 timeoutRetry: {
-                  maxNumRetry: 8, // Increased retries
-                  retryDelayMs: 1000,
-                  maxRetryDelayMs: 0
+                  maxNumRetry: 10, // Increased retries
+                  retryDelayMs: 1000, // Start with 1s delay
+                  maxRetryDelayMs: 8000 // Max 8s delay
                 },
                 errorRetry: {
-                  maxNumRetry: 8, // Increased retries
-                  retryDelayMs: 1000,
-                  maxRetryDelayMs: 8000
+                  maxNumRetry: 10, // Increased retries
+                  retryDelayMs: 1000, // Start with 1s delay
+                  maxRetryDelayMs: 8000 // Max 8s delay
                 }
               }
             },
             manifestLoadPolicy: {
               default: {
-                maxTimeToFirstByteMs: 20000, // Increased timeout
-                maxLoadTimeMs: 120000,
+                maxTimeToFirstByteMs: 30000, // 30s timeout for first byte
+                maxLoadTimeMs: 120000, // 120s total timeout
                 timeoutRetry: {
-                  maxNumRetry: 8, // Increased retries
-                  retryDelayMs: 1000,
-                  maxRetryDelayMs: 0
+                  maxNumRetry: 10, // Increased retries
+                  retryDelayMs: 1000, // Start with 1s delay
+                  maxRetryDelayMs: 8000 // Max 8s delay
                 },
                 errorRetry: {
-                  maxNumRetry: 8, // Increased retries
-                  retryDelayMs: 1000,
-                  maxRetryDelayMs: 8000
+                  maxNumRetry: 10, // Increased retries
+                  retryDelayMs: 1000, // Start with 1s delay
+                  maxRetryDelayMs: 8000 // Max 8s delay
                 }
               }
             },
-            // Enable debug logs
-            debug: true,
-            // Use fetch instead of XHR for better CORS handling
+            
+            // Debug configuration
+            debug: true, // Enable debug logs
+            
+            // XHR configuration
             xhrSetup: function(xhr, url) {
-              // Log URL being requested
               console.log('HLS requesting URL:', url);
               
               // Set withCredentials to true to include cookies in cross-origin requests
               xhr.withCredentials = true;
               
-              // Add custom headers if needed
-              // xhr.setRequestHeader('X-Custom-Header', 'value');
+              // Add custom headers
+              xhr.setRequestHeader('Accept', '*/*');
+              xhr.setRequestHeader('Accept-Language', 'en-US,en;q=0.9');
+              
+              // Set timeout
+              xhr.timeout = 30000; // 30s timeout
             },
-            // Enable low latency mode
-            lowLatencyMode: true,
-            // Increase buffer size
-            backBufferLength: 90
+            
+            // Streaming configuration
+            lowLatencyMode: false, // Disable low latency mode for better stability
+            backBufferLength: 90, // 90s back buffer
+            
+            // ABR configuration
+            startLevel: -1, // Auto start level
+            abrEwmaDefaultEstimate: 500000, // 500kbps default bandwidth estimate
+            abrBandWidthFactor: 0.8, // Conservative bandwidth factor
+            abrBandWidthUpFactor: 0.7, // Conservative bandwidth up factor
+            
+            // Other configuration
+            enableWorker: true, // Enable web worker
+            testBandwidth: true, // Test bandwidth before loading
+            progressive: true, // Enable progressive loading
+            appendErrorMaxRetry: 5 // Max retries for append errors
           });
           
           // Add event listeners before loading source
@@ -179,16 +200,44 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
           hlsInstance.on(Hls.Events.ERROR, (event, data) => {
             console.warn('HLS error:', data.type, data.details, data);
             
+            // Track error count for this instance
+            hlsInstance.errorCount = (hlsInstance.errorCount || 0) + 1;
+            
+            // If we've had too many errors, recreate the instance
+            if (hlsInstance.errorCount > 20) {
+              console.error('Too many errors, recreating HLS instance');
+              if (hlsInstance) {
+                hlsInstance.destroy();
+                // Create a new instance after a delay
+                setTimeout(() => {
+                  console.log('Recreating HLS instance after too many errors');
+                  initializePlayer();
+                }, 2000);
+              }
+              return;
+            }
+            
             if (data.fatal) {
               switch (data.type) {
                 case Hls.ErrorTypes.NETWORK_ERROR:
-                  console.error('Network error:', data);
+                  console.error('Fatal network error:', data);
                   
                   // Check if this is a CORS error
                   if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
                       data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
                       data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
                     console.log('Possible CORS issue or network error, trying to recover...');
+                    
+                    // Log more details about the error
+                    if (data.response) {
+                      console.log('Response status:', data.response.code);
+                      console.log('Response text:', data.response.text);
+                    }
+                    
+                    // If we're getting 403 or 404 errors, the stream might be invalid
+                    if (data.response && (data.response.code === 403 || data.response.code === 404)) {
+                      console.error('Stream access denied or not found. URL might be invalid or access restricted.');
+                    }
                   }
                   
                   console.log('Trying to recover from network error...');
@@ -198,19 +247,24 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
                       console.log('Restarting load after network error');
                       hlsInstance.startLoad();
                     }
-                  }, 2000);
+                  }, 3000); // Increased delay
                   break;
                   
                 case Hls.ErrorTypes.MEDIA_ERROR:
-                  console.error('Media error:', data);
+                  console.error('Fatal media error:', data);
                   console.log('Trying to recover from media error...');
-                  if (hlsInstance) {
-                    hlsInstance.recoverMediaError();
-                  }
+                  
+                  // Try to recover with a delay
+                  setTimeout(() => {
+                    if (hlsInstance) {
+                      console.log('Attempting media error recovery');
+                      hlsInstance.recoverMediaError();
+                    }
+                  }, 1000);
                   break;
                   
                 default:
-                  console.error('Unrecoverable error:', data);
+                  console.error('Fatal unrecoverable error:', data);
                   // Try to recreate the instance
                   if (hlsInstance) {
                     hlsInstance.destroy();
@@ -218,8 +272,32 @@ export function VideoPlayer({ onClose, isFullPage = false }: VideoPlayerProps) {
                     setTimeout(() => {
                       console.log('Recreating HLS instance after unrecoverable error');
                       initializePlayer();
-                    }, 2000);
+                    }, 3000); // Increased delay
                   }
+                  break;
+              }
+            } else {
+              // Non-fatal errors
+              switch (data.details) {
+                case Hls.ErrorDetails.BUFFER_STALLED_ERROR:
+                  console.warn('Buffer stalled error - this is normal during playback');
+                  break;
+                  
+                case Hls.ErrorDetails.BUFFER_APPEND_ERROR:
+                  console.warn('Buffer append error - may indicate incompatible content');
+                  // Try to recover by seeking slightly
+                  if (videoRef.current) {
+                    const currentTime = videoRef.current.currentTime;
+                    videoRef.current.currentTime = currentTime + 0.1;
+                  }
+                  break;
+                  
+                case Hls.ErrorDetails.INTERNAL_EXCEPTION:
+                  console.warn('Internal exception in HLS.js');
+                  break;
+                  
+                default:
+                  console.warn('Non-fatal HLS error:', data.details);
                   break;
               }
             }

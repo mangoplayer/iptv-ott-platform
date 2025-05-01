@@ -450,8 +450,11 @@ class XtreamAPI {
     // Create direct URL
     const directUrl = `${this.serverUrl}/live/${this.username}/${this.password}/${streamId}.m3u8`;
     
+    // Add timestamp to prevent caching
+    const timestampedUrl = `${directUrl}?_=${Date.now()}`;
+    
     // Use our proxy for HLS streams to avoid CORS issues
-    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(directUrl)}`;
+    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(timestampedUrl)}`;
     
     // Log the URLs for debugging
     console.log('Generated live stream URL:', directUrl);
@@ -470,8 +473,11 @@ class XtreamAPI {
     // Create direct URL
     const directUrl = `${this.serverUrl}/movie/${this.username}/${this.password}/${vodId}.${extension}`;
     
+    // Add timestamp to prevent caching
+    const timestampedUrl = `${directUrl}?_=${Date.now()}`;
+    
     // Use our proxy for HLS streams to avoid CORS issues
-    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(directUrl)}`;
+    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(timestampedUrl)}`;
     
     // Log the URLs for debugging
     console.log('Generated VOD stream URL:', directUrl);
@@ -490,8 +496,11 @@ class XtreamAPI {
     // Create direct URL
     const directUrl = `${this.serverUrl}/series/${this.username}/${this.password}/${episodeId}.m3u8`;
     
+    // Add timestamp to prevent caching
+    const timestampedUrl = `${directUrl}?_=${Date.now()}`;
+    
     // Use our proxy for HLS streams to avoid CORS issues
-    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(directUrl)}`;
+    const proxyUrl = `/api/stream-proxy?url=${encodeURIComponent(timestampedUrl)}`;
     
     // Log the URLs for debugging
     console.log('Generated series stream URL:', directUrl);
